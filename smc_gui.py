@@ -3,7 +3,7 @@ import os
 import subprocess
 from pathlib import Path
 
-# Importeer de vernieuwde engine
+# Importeer de engine
 import smc_cleaner as engine
 
 from PySide6.QtWidgets import (
@@ -11,17 +11,16 @@ from PySide6.QtWidgets import (
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, 
     QMessageBox, QLabel, QSpacerItem, QSizePolicy, QDialog, 
     QFormLayout, QLineEdit, QComboBox, QMenu, QProgressBar, 
-    QListWidget, QGroupBox, QFileDialog, QToolButton
+    QListWidget, QGroupBox, QFileDialog, QFrame
 )
-from PySide6.QtCore import Qt, QSettings, QThread, Signal, QSize
-from PySide6.QtGui import QAction, QIcon
+from PySide6.QtCore import Qt, QSettings, QThread, Signal
+from PySide6.QtGui import QAction, QIcon, QPixmap, QColor
 
 # =======================================================
 # 🧵 WORKER THREADS
 # =======================================================
 
 class ScanWorker(QThread):
-    # Signaal stuurt nu TWEE lijsten terug: resultaten én fouten
     finished = Signal(list, list)
     progress = Signal(str)
     
@@ -157,14 +156,20 @@ class SafeMacCleanerApp(QMainWindow):
         self.setWindowTitle("Safe Mac Cleaner")
         self.setGeometry(100, 100, 1200, 800)
         
+        # --- LOGO SETUP ---
+        script_dir = Path(__file__).parent
+        self.logo_path = str(script_dir / "logo-sfc.png")
+        
+        if os.path.exists(self.logo_path):
+            self.setWindowIcon(QIcon(self.logo_path))
+        
         self.prefs = QSettings("SafeMacCleaner", "Config")
         self.load_settings()
-        self.scan_errors = [] # Houdt fouten bij van laatste scan
+        self.scan_errors = [] 
 
         self.setup_ui()
         self.worker = None
         
-        # Start eerste scan
         self.start_scan()
 
     def load_settings(self):
@@ -187,40 +192,68 @@ class SafeMacCleanerApp(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setContentsMargins(25, 25, 25, 25) 
 
-        # Header
-        top_layout = QHBoxLayout()
-        self.header_lbl = QLabel("Schijfruimte aan het berekenen...")
-        self.header_lbl.setStyleSheet("font-size: 14px; font-weight: bold;")
-        top_layout.addWidget(self.header_lbl)
+        # --- HEADER (HORIZONTAAL) ---
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(0, 0, 0, 10)
+
+        # 1. INFO (LINKS)
+        left_box = QVBoxLayout()
         
-        # Waarschuwingsknop (blijft geel voor opvallendheid, maar in zelfde stijl)
+        # NIEUW: App Titel
+        self.title_lbl = QLabel("Safe Mac Cleaner")
+        self.title_lbl.setStyleSheet("font-size: 22px; font-weight: bold; color: #FFFFFF; margin-bottom: 5px;")
+        left_box.addWidget(self.title_lbl)
+        
+        self.header_lbl = QLabel("Schijfruimte aan het berekenen...")
+        self.header_lbl.setStyleSheet("font-size: 15px; font-weight: 600; color: #E0E0E0;")
+        left_box.addWidget(self.header_lbl)
+        
         self.warn_btn = QPushButton("⚠️ Waarschuwingen")
-        # We geven deze een object name om hem specifiek te stylen in de main stylesheet
-        self.warn_btn.setObjectName("warningButton") 
+        self.warn_btn.setObjectName("warningButton")
+        self.warn_btn.setCursor(Qt.PointingHandCursor)
         self.warn_btn.clicked.connect(self.show_errors)
         self.warn_btn.hide()
-        top_layout.addStretch()
-        top_layout.addWidget(self.warn_btn)
+        left_box.addWidget(self.warn_btn)
         
-        layout.addLayout(top_layout)
+        header_row.addLayout(left_box)
+
+        # 2. SPACER
+        header_row.addStretch()
+
+        # 3. LOGO (RECHTS)
+        if os.path.exists(self.logo_path):
+            logo_lbl = QLabel()
+            pixmap = QPixmap(self.logo_path)
+            scaled_pixmap = pixmap.scaled(140, 70, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            logo_lbl.setPixmap(scaled_pixmap)
+            logo_lbl.setAlignment(Qt.AlignRight | Qt.AlignTop)
+            header_row.addWidget(logo_lbl)
+        
+        layout.addLayout(header_row)
 
         # Progress
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 0)
+        self.progress_bar.setFixedHeight(3)
+        self.progress_bar.setStyleSheet("QProgressBar { border: none; background: #2A2A2A; } QProgressBar::chunk { background: #007AFF; }")
         self.progress_bar.hide()
         layout.addWidget(self.progress_bar)
 
         self.status_lbl = QLabel("Klaar voor scan.")
+        self.status_lbl.setStyleSheet("color: #888; font-size: 12px; margin-bottom: 5px;")
         layout.addWidget(self.status_lbl)
 
-        # Tabel
+        # --- TABEL (NAADLOOS) ---
         self.table = QTableWidget()
         self.table.setColumnCount(6)
         self.table.setHorizontalHeaderLabels(["", "#", "Grootte (MB)", "Dagen oud", "Type", "Pad"])
         self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setShowGrid(False) 
+        self.table.setFocusPolicy(Qt.NoFocus) 
+        
         self.table.itemChanged.connect(self.on_item_checked)
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self.show_context_menu)
@@ -228,6 +261,8 @@ class SafeMacCleanerApp(QMainWindow):
 
         # Knoppenbalk
         btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(12)
+        btn_layout.setContentsMargins(0, 10, 0, 0)
         
         self.btn_scan = QPushButton("🚀 Start Scan")
         self.btn_scan.clicked.connect(self.start_scan)
@@ -255,28 +290,32 @@ class SafeMacCleanerApp(QMainWindow):
         btn_layout.addStretch()
 
         self.btn_trash = QPushButton("🗑️ Verwijder Selectie")
-        # Oude rode stijl verwijderd
         self.btn_trash.setEnabled(False)
         self.btn_trash.clicked.connect(self.delete_selected)
         btn_layout.addWidget(self.btn_trash)
 
         self.btn_empty = QPushButton("⚠️ Leeg Prullenbak")
-        # Oude rode stijl verwijderd
         self.btn_empty.clicked.connect(self.empty_trash)
         btn_layout.addWidget(self.btn_empty)
 
         layout.addLayout(btn_layout)
+        
+        # NIEUW: Footer
+        layout.addSpacing(15)
+        footer_lbl = QLabel("© 2025 Safe Mac Cleaner door T. Welles")
+        footer_lbl.setAlignment(Qt.AlignCenter)
+        footer_lbl.setStyleSheet("color: #666666; font-size: 11px;")
+        layout.addWidget(footer_lbl)
 
-    # --- LOGICA: SCANNEN ---
+    # --- LOGICA ---
 
     def start_scan(self):
-        if self.worker and self.worker.isRunning():
-            return
+        if self.worker and self.worker.isRunning(): return
         
         self.table.setRowCount(0)
         self.ranked_results = []
         self.scan_errors = []
-        self.warn_btn.hide() # Verberg oude warnings
+        self.warn_btn.hide() 
 
         self.btn_scan.setEnabled(False)
         self.btn_stop.setEnabled(True)
@@ -289,7 +328,6 @@ class SafeMacCleanerApp(QMainWindow):
 
         self.worker = ScanWorker(self.scan_dirs, self.settings)
         self.worker.progress.connect(self.status_lbl.setText)
-        # Connect nu met de nieuwe signature (results, errors)
         self.worker.finished.connect(self.on_scan_finished)
         self.worker.start()
 
@@ -304,14 +342,11 @@ class SafeMacCleanerApp(QMainWindow):
         self.btn_stop.setEnabled(False)
         self.progress_bar.hide()
         
-        # Check annulering
-        if not self.worker.is_running and not results and not errors:
-            return
+        if not self.worker.is_running and not results and not errors: return
 
         self.ranked_results = results
         self.scan_errors = errors
         
-        # Toon errors indien aanwezig
         if errors:
             self.warn_btn.setText(f"⚠️ {len(errors)} mappen overgeslagen")
             self.warn_btn.show()
@@ -323,13 +358,10 @@ class SafeMacCleanerApp(QMainWindow):
         self.status_lbl.setText(f"✅ Klaar. {len(results)} bestanden gevonden ({total_mb:.1f} MB totaal).")
 
     def show_errors(self):
-        """Toont popup met lijst van overgeslagen mappen."""
         if not self.scan_errors: return
         msg = "De volgende mappen konden niet worden gescand (geen toegang):\n\n"
-        # Toon max de eerste 10
         msg += "\n".join(self.scan_errors[:10])
-        if len(self.scan_errors) > 10:
-            msg += f"\n... en nog {len(self.scan_errors)-10} andere."
+        if len(self.scan_errors) > 10: msg += f"\n... en nog {len(self.scan_errors)-10} andere."
         QMessageBox.warning(self, "Scan Waarschuwing", msg)
 
     def populate_table(self):
@@ -350,8 +382,6 @@ class SafeMacCleanerApp(QMainWindow):
             
         self.table.blockSignals(False)
 
-    # --- LOGICA: VERWIJDEREN EN ACTIES ---
-
     def on_item_checked(self):
         count = 0
         size = 0
@@ -371,14 +401,11 @@ class SafeMacCleanerApp(QMainWindow):
 
     def toggle_select_all(self):
         if self.table.rowCount() == 0: return
-        
         self.table.blockSignals(True)
         first_checked = self.table.item(0, 0).checkState() == Qt.Checked
         new_state = Qt.Unchecked if first_checked else Qt.Checked
-        
         for row in range(self.table.rowCount()):
             self.table.item(row, 0).setCheckState(new_state)
-            
         self.table.blockSignals(False)
         self.on_item_checked()
 
@@ -392,10 +419,8 @@ class SafeMacCleanerApp(QMainWindow):
     def delete_selected(self):
         indexes = [i for i in range(self.table.rowCount()) if self.table.item(i, 0).checkState() == Qt.Checked]
         if not indexes: return
-
         items_to_del = [self.ranked_results[i] for i in indexes]
         confirm = QMessageBox.question(self, "Bevestigen", f"Verplaats {len(items_to_del)} bestanden naar Prullenbak?", QMessageBox.Yes | QMessageBox.No)
-        
         if confirm == QMessageBox.Yes:
             self.del_worker = DeleteWorker(items_to_del)
             self.del_worker.finished.connect(self.on_delete_finished)
@@ -413,29 +438,23 @@ class SafeMacCleanerApp(QMainWindow):
             subprocess.run(['osascript', '-e', 'tell application "Finder" to empty trash'])
             self.update_disk_stats()
 
-    # --- DIVERSEN ---
-
     def update_disk_stats(self):
         s = engine.get_disk_stats()
-        color = "green" if s['percent_free'] > 20 else "orange" if s['percent_free'] > 10 else "red"
+        color = "#4CAF50" if s['percent_free'] > 20 else "#FF9800" if s['percent_free'] > 10 else "#F44336"
         self.header_lbl.setText(f"Vrij: {s['free_gb']:.1f} GB ({s['total_gb']:.0f} GB totaal) - <span style='color:{color}'>{s['percent_free']:.1f}% beschikbaar</span>")
 
     def show_context_menu(self, pos):
         idx = self.table.indexAt(pos)
         if not idx.isValid(): return
-        
         row = idx.row()
         path = self.ranked_results[row]['path']
-        
         menu = QMenu()
         act_open = QAction("🔍 Toon in Finder", self)
         act_open.triggered.connect(lambda: subprocess.run(['open', '-R', path]))
         menu.addAction(act_open)
-        
         act_exclude = QAction("🚫 Sluit dit bestand voortaan uit", self)
         act_exclude.triggered.connect(lambda: self.exclude_file(path))
         menu.addAction(act_exclude)
-        
         menu.exec(self.table.viewport().mapToGlobal(pos))
 
     def exclude_file(self, path):
@@ -454,43 +473,78 @@ class SafeMacCleanerApp(QMainWindow):
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     
-    # --- UNIFORME STYLING VOOR ALLE KNOPPEN ---
-    # Dit zorgt ervoor dat alle knoppen dezelfde donkere, rustige stijl hebben.
-    # Alleen de knop met objectName "warningButton" krijgt een afwijkende kleur.
+    # --- ULTRA CLEAN DARK THEME ---
     app.setStyleSheet("""
-        QTableWidget::item { padding: 5px; } 
-        QHeaderView::section { padding: 5px; }
-        
-        QPushButton {
-            background-color: #3A3A3A;
+        QMainWindow {
+            background-color: #1E1E1E;
+        }
+        QLabel {
             color: #E0E0E0;
-            border: 1px solid #555555;
-            padding: 6px 12px;
-            border-radius: 4px;
+        }
+        QTableWidget {
+            background-color: #1E1E1E;
+            color: #E0E0E0;
+            border: none;
+            gridline-color: #2A2A2A;
+        }
+        QTableWidget::item { 
+            padding: 8px; 
+            border-bottom: 1px solid #2A2A2A;
+        }
+        QTableWidget::item:selected {
+            background-color: #334455;
+            color: white;
+        }
+        QHeaderView::section { 
+            background-color: #1E1E1E;
+            color: #999;
+            text-transform: uppercase;
+            font-size: 11px;
+            font-weight: bold;
+            padding: 6px;
+            border: none;
+            border-bottom: 2px solid #333;
+        }
+        QScrollBar:vertical {
+            border: none;
+            background: #1E1E1E;
+            width: 10px;
+            margin: 0px 0px 0px 0px;
+        }
+        QScrollBar::handle:vertical {
+            background: #444;
+            min-height: 20px;
+            border-radius: 5px;
+        }
+        
+        /* KNOPPEN */
+        QPushButton {
+            background-color: #2D2D2D;
+            color: #CCCCCC;
+            border: 1px solid #3E3E3E;
+            padding: 6px 14px;
+            border-radius: 6px;
             font-size: 13px;
         }
         QPushButton:hover {
-            background-color: #454545;
-            border-color: #666666;
+            background-color: #383838;
+            border-color: #555555;
+            color: white;
         }
         QPushButton:pressed {
-            background-color: #2A2A2A;
-            border-color: #444444;
+            background-color: #222222;
         }
         QPushButton:disabled {
-            background-color: #2A2A2A;
-            color: #666666;
-            border-color: #333333;
+            background-color: #222222;
+            color: #555555;
+            border-color: #2A2A2A;
         }
         
-        /* Specifieke stijl voor de waarschuwingsknop, zodat die toch opvalt maar in dezelfde vorm */
         QPushButton#warningButton {
-            background-color: #D4AF37; /* Donkerder geel/goud voor minder 'alarm' effect */
+            background-color: #D4AF37; 
             color: #222222;
             border: none;
-        }
-        QPushButton#warningButton:hover {
-            background-color: #E5C355;
+            font-weight: bold;
         }
     """)
     
