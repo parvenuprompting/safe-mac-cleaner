@@ -1,4 +1,4 @@
-# 🔎 Safe Mac Cleaner – Verbeterde Versie
+# 🔎 Safe Mac Cleaner 
 
 Safe Mac Cleaner is een lichte, voorspelbare macOS-app voor veilige schijfopruiming. De kern bestaat uit eenvoudige, betrouwbare Python-logica, verpakt in een overzichtelijke **PySide6 GUI**. Geen automatische deletes, geen cloud, geen verborgen acties — volledige controle blijft altijd bij de gebruiker.
 
