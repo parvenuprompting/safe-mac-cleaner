@@ -156,9 +156,14 @@ class SafeMacCleanerApp(QMainWindow):
         self.setWindowTitle("Safe Mac Cleaner")
         self.setGeometry(100, 100, 1200, 800)
         
-        # --- LOGO SETUP ---
-        script_dir = Path(__file__).parent
-        self.logo_path = str(script_dir / "logo-sfc.png")
+        # --- PATH FIX VOOR PYINSTALLER ---
+        # Dit zorgt dat hij het logo vindt, zowel tijdens testen als in de .app
+        if getattr(sys, 'frozen', False):
+            base_path = sys._MEIPASS
+        else:
+            base_path = os.path.dirname(os.path.abspath(__file__))
+            
+        self.logo_path = os.path.join(base_path, "logo-sfc.png")
         
         if os.path.exists(self.logo_path):
             self.setWindowIcon(QIcon(self.logo_path))
@@ -201,7 +206,6 @@ class SafeMacCleanerApp(QMainWindow):
         # 1. INFO (LINKS)
         left_box = QVBoxLayout()
         
-        # NIEUW: App Titel
         self.title_lbl = QLabel("Safe Mac Cleaner")
         self.title_lbl.setStyleSheet("font-size: 22px; font-weight: bold; color: #FFFFFF; margin-bottom: 5px;")
         left_box.addWidget(self.title_lbl)
@@ -300,7 +304,7 @@ class SafeMacCleanerApp(QMainWindow):
 
         layout.addLayout(btn_layout)
         
-        # NIEUW: Footer
+        # Footer
         layout.addSpacing(15)
         footer_lbl = QLabel("© 2025 Safe Mac Cleaner door T. Welles")
         footer_lbl.setAlignment(Qt.AlignCenter)
