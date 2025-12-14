@@ -1,188 +1,182 @@
 import os
 import time
-import psutil 
+import psutil
 import json
+import logging
 from pathlib import Path
-from send2trash import send2trash 
+from send2trash import send2trash
+from typing import List, Dict, Optional, Callable, Any
 
 # =======================================================
-# ⚙️ CONFIGURATIE 
+# ⚙️ CONFIGURATIE & CONSTANTEN
 # =======================================================
 
-# JOUW SPECIFIEKE GEBRUIKERSMAP
-USERNAME = "T"
+# Logica config
+DEFAULT_MIN_SIZE_MB = 1
+DEFAULT_MIN_AGE_DAYS = 7
+DEFAULT_TOP_N = 100
+DEFAULT_AGE_MODE = "last_used"
 
-SCAN_DIRECTORIES = [
-    f"/Users/{USERNAME}/Downloads",
-    f"/Users/{USERNAME}/Desktop",
-    f"/Users/{USERNAME}/Documents", 
-    f"/Users/{USERNAME}/Movies",    
+# Veiligheidsregels
+EXCLUDE_EXTENSIONS = {".app", ".pkg", ".framework", ".DS_Store", ".localized"}
+EXCLUDE_PREFIXES = {'.', 'Library', 'System'}
+EXCLUSION_FILE = Path.home() / ".smc_exclusions.json"
+
+# Standaard mappen (als fallback)
+DEFAULT_SCAN_DIRS = [
+    str(Path.home() / "Downloads"),
+    str(Path.home() / "Desktop"),
+    str(Path.home() / "Documents"),
+    str(Path.home() / "Movies"),
 ]
 
-# Startwaarden
-MINIMUM_SIZE_MB = 1         
-MINIMUM_AGE_DAYS = 7         
-TOP_N_RESULTS = 100          
-AGE_MODE = "last_used"
-DRY_RUN = False              
-
-# Constante voor vertaling in de GUI
 AGE_MODES = {
     "last_used": "Laatst gebruikt",
     "last_modified": "Laatst gewijzigd"
 }
 
-# Veiligheidsregels: Deze bestanden slaan we ALTIJD over
-EXCLUDE_EXTENSIONS = [".app", ".pkg", ".framework", ".DS_Store"]
-EXCLUDE_PREFIXES = ['.'] 
-EXCLUSION_FILE = os.path.expanduser("~/.smc_exclusions.json")
+# Logging instellen voor debugging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # ==================================
-# 💡 LOGICA FUNCTIES
+# 💡 HULP FUNCTIES
 # ==================================
 
-def get_disk_stats():
+def get_disk_stats() -> Dict[str, float]:
     """Haalt de schijfgebruikstatistieken op."""
-    partition_path = os.path.expanduser('~') 
     try:
-        disk_info = psutil.disk_usage(partition_path)
+        disk_info = psutil.disk_usage(str(Path.home()))
         return {
             'total_gb': disk_info.total / (1024**3),
             'free_gb': disk_info.free / (1024**3),
             'percent_free': 100.0 - disk_info.percent,
         }
-    except:
-        return {'total_gb': 0, 'free_gb': 0, 'percent_free': 0}
+    except Exception as e:
+        logging.error(f"Fout bij ophalen schijfinfo: {e}")
+        return {'total_gb': 0.0, 'free_gb': 0.0, 'percent_free': 0.0}
 
-
-def get_age_info(path, age_mode):
-    """Bepaalt de leeftijd van een bestand."""
-    now = time.time()
+def get_age_info(path: str, age_mode: str) -> float:
+    """Bepaalt de leeftijd van een bestand in dagen."""
     try:
         stat = os.stat(path)
-        if age_mode == "last_used":
-            # atime = access time
-            timestamp = stat.st_atime
-            source = "atime" 
-        else: 
-            # mtime = modification time
-            timestamp = stat.st_mtime
-            source = "mtime" 
-            
-        age_days = (now - timestamp) / (60 * 60 * 24)
-        return age_days, source
+        timestamp = stat.st_atime if age_mode == "last_used" else stat.st_mtime
+        age_days = (time.time() - timestamp) / (60 * 60 * 24)
+        return age_days
     except Exception:
-        return 0, "ERROR"
+        return 0.0
 
 # ==================================
-# 🛡️ EXCLUSIE LIJST FUNCTIES
+# 🛡️ EXCLUSIE LIJST BEHEER
 # ==================================
 
-def load_exclusion_list():
-    if not os.path.exists(EXCLUSION_FILE): return []
+def load_exclusion_list() -> List[str]:
+    if not EXCLUSION_FILE.exists():
+        return []
     try:
-        with open(EXCLUSION_FILE, 'r') as f: return json.load(f)
-    except: return []
-
-def add_to_exclusion_list(path):
-    current = load_exclusion_list()
-    if path not in current:
-        current.append(path)
-        try:
-            with open(EXCLUSION_FILE, 'w') as f: json.dump(current, f, indent=4)
-            return True
-        except: return False
-    return True
-
-def remove_from_exclusion_list(path):
-    current = load_exclusion_list()
-    if path in current:
-        current.remove(path)
-        try:
-            with open(EXCLUSION_FILE, 'w') as f: json.dump(current, f, indent=4)
-            return True
-        except: return False
-    return False
-
-
-def validate_and_scan(top_n_results, minimum_age_days, age_mode, minimum_size_mb):
-    """De scanfunctie die de bestanden verzamelt."""
-    valid_dirs = []
-    
-    # Check of mappen bestaan
-    for d in SCAN_DIRECTORIES:
-        if os.path.isdir(d):
-            valid_dirs.append(d)
-            
-    if not valid_dirs:
+        with open(EXCLUSION_FILE, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        logging.error(f"Kon exclusielijst niet laden: {e}")
         return []
 
-    exclusions = load_exclusion_list()
-    candidates = []
+def toggle_exclusion(path: str, add: bool = True) -> bool:
+    current = load_exclusion_list()
+    try:
+        if add:
+            if path not in current:
+                current.append(path)
+        else:
+            if path in current:
+                current.remove(path)
+        
+        with open(EXCLUSION_FILE, 'w') as f:
+            json.dump(current, f, indent=4)
+        return True
+    except Exception as e:
+        logging.error(f"Fout bij bijwerken exclusielijst: {e}")
+        return False
 
+# ==================================
+# 🚀 SCAN ENGINE (NU MET PROGRESSIE)
+# ==================================
+
+def scan_disk(
+    directories: List[str],
+    min_size_mb: int,
+    min_age_days: int,
+    age_mode: str,
+    top_n: int,
+    progress_callback: Optional[Callable[[str], None]] = None,
+    should_stop: Optional[Callable[[], bool]] = None
+) -> List[Dict[str, Any]]:
+    """
+    Scant de schijf met ondersteuning voor voortgang en annulering.
+    """
+    candidates = []
+    exclusions = set(load_exclusion_list())
+    
+    # Valideer mappen
+    valid_dirs = [d for d in directories if os.path.isdir(d)]
+    
     for folder in valid_dirs:
+        # Check voor annulering
+        if should_stop and should_stop():
+            return []
+
+        if progress_callback:
+            progress_callback(f"Scannen van: {folder}...")
+
         for root, dirs, files in os.walk(folder):
+            if should_stop and should_stop():
+                return []
             
-            # Filter verborgen mappen (.git, etc)
-            dirs[:] = [d for d in dirs if not d.startswith(tuple(EXCLUDE_PREFIXES))]
+            # Filter verborgen/systeem mappen
+            dirs[:] = [d for d in dirs if not d.startswith('.') and d not in EXCLUDE_PREFIXES]
             
             for name in files:
-                # Sla verborgen bestanden over
+                # Basis filters
                 if name.startswith('.'): continue
+                if any(name.endswith(ext) for ext in EXCLUDE_EXTENSIONS): continue
                 
                 path = os.path.join(root, name)
+                if path in exclusions: continue
                 
-                # Veiligheidscheck extensies
-                if any(name.endswith(ext) for ext in EXCLUDE_EXTENSIONS):
-                    continue
-                
-                # Check exclusielijst
-                if path in exclusions:
-                    continue
-
                 try:
                     stat = os.stat(path)
                     size_mb = stat.st_size / (1024 * 1024)
                     
-                    # 1. Filter op grootte
-                    if size_mb < minimum_size_mb: continue
-                        
-                    # 2. Filter op leeftijd
-                    age_days, age_source = get_age_info(path, age_mode)
-                    if age_days < minimum_age_days: continue
+                    if size_mb < min_size_mb: continue
                     
-                    # Als we hier zijn, mag het bestand getoond worden
+                    age_days = get_age_info(path, age_mode)
+                    if age_days < min_age_days: continue
+                    
                     candidates.append({
                         "path": path,
                         "size_mb": size_mb,
                         "age_days": age_days,
-                        "age_source": age_source,
-                        "file_type": Path(path).suffix.lstrip('.') or 'file'
+                        "file_type": Path(path).suffix or 'file'
                     })
-                except Exception:
+                except (PermissionError, OSError):
                     continue
-    
-    # Sorteren: Grootste en oudste eerst
-    candidates.sort(key=lambda x: (x["size_mb"], x["age_days"]), reverse=True)
-    
-    return candidates
 
-def execute_deletion(results, indexes):
-    """Verplaatst bestanden naar de prullenbak."""
+    # Sorteren
+    if progress_callback:
+        progress_callback("Resultaten sorteren...")
+        
+    candidates.sort(key=lambda x: (x["size_mb"], x["age_days"]), reverse=True)
+    return candidates[:top_n]
+
+def delete_files(files: List[Dict[str, Any]], dry_run: bool = False) -> List[str]:
+    """Verwijdert bestanden (of simuleert dit)."""
     log = []
-    
-    for i in indexes:
-        if 0 <= i < len(results):
-            item = results[i]
-            file_path = item['path']
-            
-            if DRY_RUN:
-                log.append(f"DRY-RUN: {item['size_mb']:.2f} MB: {file_path}")
+    for item in files:
+        path = item['path']
+        try:
+            if not dry_run:
+                send2trash(path)
+                log.append(f"VERPLAATST: {path}")
             else:
-                try:
-                    send2trash(file_path)
-                    log.append(f"VERPLAATST: {item['size_mb']:.2f} MB: {file_path}")
-                except Exception as e:
-                    log.append(f"FOUT bij {file_path}: {e}")
-    
+                log.append(f"DRY-RUN: {path}")
+        except Exception as e:
+            log.append(f"FOUT: {path} - {e}")
     return log

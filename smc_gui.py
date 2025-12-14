@@ -1,579 +1,441 @@
 import sys
 import os
-import subprocess 
+import subprocess
+from pathlib import Path
 
-# Importeer de logica en configuratie uit bestand 1
-from smc_cleaner import (validate_and_scan, execute_deletion, get_disk_stats, 
-                         load_exclusion_list, add_to_exclusion_list, remove_from_exclusion_list)
-from smc_cleaner import TOP_N_RESULTS, MINIMUM_SIZE_MB, MINIMUM_AGE_DAYS, AGE_MODE, AGE_MODES
+# Importeer de vernieuwde logica (zorg dat smc_cleaner.py ook up-to-date is!)
+import smc_cleaner as engine
 
-from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, 
-                               QVBoxLayout, QHBoxLayout, QPushButton, 
-                               QTableWidget, QTableWidgetItem, QHeaderView, 
-                               QMessageBox, QLabel, QSpacerItem, QSizePolicy,
-                               QDialog, QFormLayout, QLineEdit, QComboBox,
-                               QMenu) 
-from PySide6.QtGui import QFont, QAction 
-from PySide6.QtCore import Qt, QSettings 
-
-# =======================================================
-# 🎨 MODERNE STYLING (QSS)
-# =======================================================
-
-MODERN_STYLESHEET = """
-/* ALGEMENE INSTELLINGEN */
-QMainWindow, QDialog {
-    background-color: #F5F5F7;  /* Lichte Mac-grijze achtergrond */
-    color: #1D1D1F;
-}
-
-QLabel {
-    color: #1D1D1F;
-}
-
-/* TABEL STYLING */
-QTableWidget {
-    background-color: #FFFFFF;
-    border: 1px solid #D1D1D6;
-    border-radius: 8px;
-    gridline-color: #E5E5EA;
-    font-size: 13px;
-    selection-background-color: #007AFF; /* Apple Blue */
-    selection-color: white;
-}
-
-QHeaderView::section {
-    background-color: #F2F2F7;
-    padding: 6px;
-    border: none;
-    border-bottom: 1px solid #D1D1D6;
-    font-weight: bold;
-    color: #555;
-}
-
-/* KNOPPEN STYLING (Basis) */
-QPushButton {
-    background-color: #FFFFFF;
-    border: 1px solid #D1D1D6;
-    border-radius: 6px;
-    padding: 8px 16px;
-    font-size: 13px;
-    font-weight: 500;
-    color: #1D1D1F;
-    min-width: 80px;
-}
-
-QPushButton:hover {
-    background-color: #F2F2F7;
-    border-color: #8E8E93;
-}
-
-QPushButton:pressed {
-    background-color: #E5E5EA;
-}
-
-QPushButton:disabled {
-    background-color: #F5F5F7;
-    color: #AEAEB2;
-    border-color: #E5E5EA;
-}
-
-/* PRIMAIRE ACTIE KNOP (SCAN) - BLAUW */
-QPushButton#primaryBtn {
-    background-color: #007AFF;
-    color: white;
-    border: 1px solid #007AFF;
-}
-QPushButton#primaryBtn:hover {
-    background-color: #0062CC;
-}
-
-/* GEVAARLIJKE KNOPPEN (DELETE) - ROOD ACCENT */
-QPushButton#dangerBtn {
-    background-color: #FFF0F0;
-    color: #D70015;
-    border: 1px solid #FFD0D0;
-}
-QPushButton#dangerBtn:hover {
-    background-color: #FFE5E5;
-    border-color: #FFB0B0;
-}
-
-/* KRITIEKE KNOP (LEEG PRULLENBAK) - VOLLEDIG ROOD */
-QPushButton#criticalBtn {
-    background-color: #D70015;
-    color: white;
-    border: 1px solid #D70015;
-    font-weight: bold;
-}
-QPushButton#criticalBtn:hover {
-    background-color: #B00011;
-}
-"""
+from PySide6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
+    QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, 
+    QMessageBox, QLabel, QSpacerItem, QSizePolicy, QDialog, 
+    QFormLayout, QLineEdit, QComboBox, QMenu, QProgressBar, 
+    QListWidget, QGroupBox, QFileDialog
+)
+from PySide6.QtCore import Qt, QSettings, QThread, Signal, QObject
+from PySide6.QtGui import QAction, QIcon
 
 # =======================================================
-# INSTELINGEN DIALOOGVENSTER
+# 🧵 WORKER THREADS (Zodat de GUI niet vastloopt)
+# =======================================================
+
+class ScanWorker(QThread):
+    finished = Signal(list)
+    progress = Signal(str)
+    
+    def __init__(self, directories, settings):
+        super().__init__()
+        self.directories = directories
+        self.settings = settings
+        self.is_running = True
+
+    def run(self):
+        # Start de scan via de engine
+        results = engine.scan_disk(
+            directories=self.directories,
+            min_size_mb=self.settings['size'],
+            min_age_days=self.settings['age'],
+            age_mode=self.settings['mode'],
+            top_n=self.settings['top_n'],
+            progress_callback=self.emit_progress,
+            should_stop=lambda: not self.is_running
+        )
+        if self.is_running:
+            self.finished.emit(results)
+
+    def emit_progress(self, msg):
+        self.progress.emit(msg)
+
+    def stop(self):
+        self.is_running = False
+
+class DeleteWorker(QThread):
+    finished = Signal(str) # Geeft samenvatting terug
+
+    def __init__(self, items):
+        super().__init__()
+        self.items = items
+
+    def run(self):
+        log = engine.delete_files(self.items)
+        success_count = len([l for l in log if "VERPLAATST" in l])
+        total_mb = sum(item['size_mb'] for item in self.items)
+        self.finished.emit(f"✅ {success_count} bestanden ({total_mb:.1f} MB) verplaatst naar Prullenbak.")
+
+# =======================================================
+# ⚙️ INSTELLINGEN SCHERM (Met Map Selectie)
 # =======================================================
 
 class SettingsDialog(QDialog):
-    """Dialoogvenster voor het aanpassen van de scanfilters."""
-    def __init__(self, parent=None, settings=None):
+    def __init__(self, parent=None, current_settings=None, current_dirs=None):
         super().__init__(parent)
-        self.setWindowTitle("Scan Instellingen Aanpassen")
-        self.settings = settings
-        self.layout = QFormLayout(self)
-        
-        # 1. Aantal Getoonde Items
-        self.top_n_input = QLineEdit(self)
-        self.top_n_input.setText(str(self.settings.value('TOP_N_RESULTS', TOP_N_RESULTS, type=int)))
-        self.layout.addRow("Max. Aantal Resultaten:", self.top_n_input)
-        
-        # 2. Minimum Ouderdom
-        self.age_input = QLineEdit(self)
-        self.age_input.setText(str(self.settings.value('MINIMUM_AGE_DAYS', MINIMUM_AGE_DAYS, type=int)))
-        self.layout.addRow("Minimale Ouderdom (Dagen):", self.age_input)
-        
-        # 3. Ouderdom Modus
-        self.mode_combo = QComboBox(self)
-        mode_keys = list(AGE_MODES.keys())
-        mode_values = list(AGE_MODES.values())
-        self.mode_combo.addItems(mode_values) 
-        
-        current_mode_key = self.settings.value('AGE_MODE', AGE_MODE, type=str)
-        if current_mode_key in mode_keys:
-             current_mode_index = mode_keys.index(current_mode_key)
-             self.mode_combo.setCurrentIndex(current_mode_index)
+        self.setWindowTitle("Instellingen & Filters")
+        self.resize(500, 600)
+        self.layout = QVBoxLayout(self)
 
-        self.layout.addRow("Tijdscriterium:", self.mode_combo)
+        # --- Filters Sectie ---
+        filter_group = QGroupBox("Scan Filters")
+        form_layout = QFormLayout()
         
-        # 4. Minimum Grootte
-        self.size_input = QLineEdit(self)
-        self.size_input.setText(str(self.settings.value('MINIMUM_SIZE_MB', MINIMUM_SIZE_MB, type=int)))
-        self.layout.addRow("Minimale Grootte (MB):", self.size_input)
+        self.top_n_input = QLineEdit(str(current_settings['top_n']))
+        form_layout.addRow("Max. resultaten:", self.top_n_input)
+        
+        self.age_input = QLineEdit(str(current_settings['age']))
+        form_layout.addRow("Minimale ouderdom (dagen):", self.age_input)
+        
+        self.size_input = QLineEdit(str(current_settings['size']))
+        form_layout.addRow("Minimale grootte (MB):", self.size_input)
+        
+        self.mode_combo = QComboBox()
+        for key, val in engine.AGE_MODES.items():
+            self.mode_combo.addItem(val, key)
+            if key == current_settings['mode']:
+                self.mode_combo.setCurrentText(val)
+        form_layout.addRow("Tijdscriterium:", self.mode_combo)
+        
+        filter_group.setLayout(form_layout)
+        self.layout.addWidget(filter_group)
 
-        # OK/Annuleer Knoppen
-        button_layout = QHBoxLayout()
-        ok_button = QPushButton("Opslaan en Sluiten")
-        ok_button.clicked.connect(self.accept)
-        cancel_button = QPushButton("Annuleren")
-        cancel_button.clicked.connect(self.reject)
+        # --- Mappen Sectie ---
+        dir_group = QGroupBox("Te Scannen Mappen")
+        dir_layout = QVBoxLayout()
         
-        button_layout.addWidget(ok_button)
-        button_layout.addWidget(cancel_button)
-        self.layout.addRow(button_layout)
+        self.dir_list = QListWidget()
+        for d in current_dirs:
+            self.dir_list.addItem(d)
+        dir_layout.addWidget(self.dir_list)
         
-    def get_settings(self):
-        try:
-            selected_mode_key = list(AGE_MODES.keys())[self.mode_combo.currentIndex()]
-            new_settings = {
-                'TOP_N_RESULTS': int(self.top_n_input.text()),
-                'MINIMUM_AGE_DAYS': int(self.age_input.text()),
-                'AGE_MODE': selected_mode_key,
-                'MINIMUM_SIZE_MB': int(self.size_input.text())
-            }
-            if new_settings['TOP_N_RESULTS'] <= 0 or new_settings['MINIMUM_AGE_DAYS'] < 0 or new_settings['MINIMUM_SIZE_MB'] < 0:
-                 QMessageBox.warning(self, "Ongeldige Invoer", "Voer geldige positieve nummers in.")
-                 return None
-            return new_settings
-        except ValueError:
-            QMessageBox.warning(self, "Ongeldige Invoer", "Zorg ervoor dat alle waarden hele getallen zijn.")
-            return None
+        btn_box = QHBoxLayout()
+        add_btn = QPushButton("➕ Map Toevoegen")
+        add_btn.clicked.connect(self.add_dir)
+        del_btn = QPushButton("➖ Verwijder Selectie")
+        del_btn.clicked.connect(self.remove_dir)
+        btn_box.addWidget(add_btn)
+        btn_box.addWidget(del_btn)
+        
+        dir_layout.addLayout(btn_box)
+        dir_group.setLayout(dir_layout)
+        self.layout.addWidget(dir_group)
 
+        # --- Knoppen ---
+        ok_btn = QPushButton("Opslaan & Sluiten")
+        ok_btn.clicked.connect(self.accept)
+        self.layout.addWidget(ok_btn)
+
+    def add_dir(self):
+        d = QFileDialog.getExistingDirectory(self, "Kies een map")
+        if d:
+            # Check of map al bestaat
+            items = [self.dir_list.item(i).text() for i in range(self.dir_list.count())]
+            if d not in items:
+                self.dir_list.addItem(d)
+
+    def remove_dir(self):
+        for item in self.dir_list.selectedItems():
+            self.dir_list.takeItem(self.dir_list.row(item))
+
+    def get_data(self):
+        # Haal data mode key op
+        idx = self.mode_combo.currentIndex()
+        mode_key = self.mode_combo.itemData(idx)
+        
+        settings = {
+            'top_n': int(self.top_n_input.text()),
+            'age': int(self.age_input.text()),
+            'size': int(self.size_input.text()),
+            'mode': mode_key
+        }
+        dirs = [self.dir_list.item(i).text() for i in range(self.dir_list.count())]
+        return settings, dirs
 
 # =======================================================
-# HOOFD APPLICATIE VENSTER
+# 📱 HOOFDSCHERM
 # =======================================================
 
 class SafeMacCleanerApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Safe Mac Cleaner") 
-        self.setGeometry(100, 100, 1200, 800) 
-
-        self.settings = QSettings("SafeMacCleaner", "App")
-
-        self.top_n_results = self.settings.value('TOP_N_RESULTS', TOP_N_RESULTS, type=int)
-        self.minimum_age_days = self.settings.value('MINIMUM_AGE_DAYS', MINIMUM_AGE_DAYS, type=int)
-        self.age_mode = self.settings.value('AGE_MODE', AGE_MODE, type=str)
-        self.minimum_size_mb = self.settings.value('MINIMUM_SIZE_MB', MINIMUM_SIZE_MB, type=int)
-
-        main_widget = QWidget()
-        self.setCentralWidget(main_widget)
-        self.main_layout = QVBoxLayout(main_widget)
+        self.setWindowTitle("Safe Mac Cleaner")
+        self.setGeometry(100, 100, 1150, 750)
         
-        self.ranked_results = [] 
-        self.selected_size_mb = 0.0 
+        # Instellingen laden
+        self.prefs = QSettings("SafeMacCleaner", "Config")
+        self.load_settings()
 
-        self.init_menu_bar()
-        self.init_ui()
+        # UI Opbouwen
+        self.setup_ui()
+        self.worker = None
         
-    def init_menu_bar(self):
-        menu_bar = self.menuBar()
-        settings_menu = menu_bar.addMenu("Instellingen")
-        settings_action = settings_menu.addAction("Pas Filters Aan...")
-        settings_action.triggered.connect(self.show_settings_dialog)
-        
-    def show_settings_dialog(self):
-        dialog = SettingsDialog(self, settings=self.settings)
-        if dialog.exec() == QDialog.Accepted:
-            new_settings = dialog.get_settings()
-            if new_settings:
-                for key, value in new_settings.items():
-                    self.settings.setValue(key, value)
-                self.settings.sync() 
+        # Start direct een scan
+        self.start_scan()
 
-                self.top_n_results = new_settings['TOP_N_RESULTS']
-                self.minimum_age_days = new_settings['MINIMUM_AGE_DAYS']
-                self.age_mode = new_settings['AGE_MODE']
-                self.minimum_size_mb = new_settings['MINIMUM_SIZE_MB']
-                
-                QMessageBox.information(self, "Instellingen Opgeslagen", 
-                                        "Nieuwe instellingen zijn opgeslagen. Voer een nieuwe scan uit om de resultaten bij te werken.")
-                
-                self.update_status_label()
+    def load_settings(self):
+        self.scan_dirs = self.prefs.value("scan_dirs", engine.DEFAULT_SCAN_DIRS)
+        self.settings = {
+            'top_n': int(self.prefs.value("top_n", engine.DEFAULT_TOP_N)),
+            'age': int(self.prefs.value("age", engine.DEFAULT_MIN_AGE_DAYS)),
+            'size': int(self.prefs.value("size", engine.DEFAULT_MIN_SIZE_MB)),
+            'mode': self.prefs.value("mode", engine.DEFAULT_AGE_MODE)
+        }
 
+    def save_settings(self):
+        self.prefs.setValue("scan_dirs", self.scan_dirs)
+        self.prefs.setValue("top_n", self.settings['top_n'])
+        self.prefs.setValue("age", self.settings['age'])
+        self.prefs.setValue("size", self.settings['size'])
+        self.prefs.setValue("mode", self.settings['mode'])
 
-    def update_status_label(self):
-        translated_age_mode = AGE_MODES.get(self.age_mode, self.age_mode)
-        self.status_label.setText(
-            f"Filter: >{self.minimum_size_mb}MB | >{self.minimum_age_days} dagen ({translated_age_mode}) | Max. {self.top_n_results} items getoond."
-        )
+    def setup_ui(self):
+        central = QWidget()
+        self.setCentralWidget(central)
+        layout = QVBoxLayout(central)
+        layout.setContentsMargins(20, 20, 20, 20)
 
+        # 1. Header & Disk Info
+        self.header_lbl = QLabel("Schijfruimte aan het berekenen...")
+        self.header_lbl.setStyleSheet("font-size: 14px; font-weight: bold;")
+        layout.addWidget(self.header_lbl)
 
-    def update_selection_size_label(self):
-        selected_size = 0.0
-        for row in range(self.table.rowCount()):
-            if self.table.item(row, 0) and self.table.item(row, 0).checkState() == Qt.Checked:
-                try:
-                    size_text = self.table.item(row, 2).text().replace(',', '.') 
-                    selected_size += float(size_text)
-                except Exception:
-                    continue
-                    
-        self.selected_size_mb = selected_size
-        
-        if selected_size > 0.0:
-            self.delete_selected_button.setText(f"🗑️ Naar Prullenbak ({self.selected_size_mb:.2f} MB)")
-            self.delete_selected_button.setEnabled(True)
-            self.preview_button.setEnabled(True)
-        else:
-            self.delete_selected_button.setText("🗑️ Naar Prullenbak")
-            self.delete_selected_button.setEnabled(False)
-            self.preview_button.setEnabled(False)
+        # 2. Progress Bar
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 0) # Indeterminate mode (heen en weer bewegend balkje)
+        self.progress_bar.hide()
+        layout.addWidget(self.progress_bar)
 
-        checked_count = len(self.get_checked_rows())
-        if checked_count > 0 and checked_count == self.table.rowCount():
-            self.select_all_button.setText("❌ Deselecteer Alles")
-        else:
-            self.select_all_button.setText("✅ Selecteer Alles")
+        # 3. Status Label
+        self.status_lbl = QLabel("Klaar voor scan.")
+        layout.addWidget(self.status_lbl)
 
-
-    def init_ui(self):
-        # 0. Header
-        self.disk_header_label = QLabel()
-        self.disk_header_label.setFont(QFont("Arial", 12, QFont.Bold))
-        self.main_layout.addWidget(self.disk_header_label)
-        
-        # 1. Status/Filter Label
-        self.status_label = QLabel()
-        self.update_status_label() 
-        self.status_label.setFont(QFont("Arial", 11))
-        self.main_layout.addWidget(self.status_label)
-        
-        # 2. Tabel
+        # 4. Tabel
         self.table = QTableWidget()
         self.table.setColumnCount(6)
-        self.table.setHorizontalHeaderLabels(["Selecteer", "#", "Grootte (MB)", "Ouderdom (Dagen)", "Type", "Bestandspad"])
-        
-        # --- TABEL STYLING ---
-        self.table.setShowGrid(False) 
-        self.table.setAlternatingRowColors(True)
-        self.table.verticalHeader().setVisible(False) 
-        self.table.verticalHeader().setDefaultSectionSize(32)
-        
-        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch) 
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        
-        self.table.setSelectionBehavior(QTableWidget.SelectRows) 
-        self.table.setSelectionMode(QTableWidget.NoSelection)
-
+        self.table.setHorizontalHeaderLabels(["", "#", "Grootte (MB)", "Dagen oud", "Type", "Pad"])
+        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch)
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.itemChanged.connect(self.on_item_checked)
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.table.customContextMenuRequested.connect(self.context_menu_request)
-        self.table.itemChanged.connect(self.handle_item_change)
+        self.table.customContextMenuRequested.connect(self.show_context_menu)
+        layout.addWidget(self.table)
 
-        self.main_layout.addWidget(self.table)
+        # 5. Knoppen Balk
+        btn_layout = QHBoxLayout()
         
-        # 3. Knoppen Layout
-        button_layout = QHBoxLayout()
-        button_layout.setSpacing(12) 
-        
-        # 3a. Start Nieuwe Scan
-        self.scan_button = QPushButton("🚀 Start Nieuwe Scan")
-        self.scan_button.setObjectName("primaryBtn") # BLAUW
-        self.scan_button.setCursor(Qt.PointingHandCursor)
-        self.scan_button.clicked.connect(self.run_scan)
-        button_layout.addWidget(self.scan_button)
-        
-        # 3b. Selecteer/Deselecteer Alles
-        self.select_all_button = QPushButton("✅ Selecteer Alles")
-        self.select_all_button.setCursor(Qt.PointingHandCursor)
-        self.select_all_button.clicked.connect(self.toggle_select_all)
-        button_layout.addWidget(self.select_all_button)
-        
-        button_layout.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
-        
-        # 3c. Toon in Finder
-        self.preview_button = QPushButton("🔍 Toon in Finder")
-        self.preview_button.setCursor(Qt.PointingHandCursor)
-        self.preview_button.clicked.connect(self.preview_file)
-        self.preview_button.setEnabled(False) 
-        button_layout.addWidget(self.preview_button)
+        self.btn_scan = QPushButton("🚀 Start Scan")
+        self.btn_scan.clicked.connect(self.start_scan)
+        btn_layout.addWidget(self.btn_scan)
 
-        # 3d. Verplaats Geselecteerde naar Prullenbak
-        self.delete_selected_button = QPushButton("🗑️ Naar Prullenbak")
-        self.delete_selected_button.setObjectName("dangerBtn") # LICHT ROOD
-        self.delete_selected_button.setCursor(Qt.PointingHandCursor)
-        self.delete_selected_button.clicked.connect(self.delete_selected)
-        self.delete_selected_button.setEnabled(False) 
-        button_layout.addWidget(self.delete_selected_button)
-        
-        # 3e. Leeg Prullenbak
-        self.empty_trash_button = QPushButton("⚠️ Leeg Prullenbak")
-        self.empty_trash_button.setObjectName("criticalBtn") # DONKER ROOD
-        self.empty_trash_button.setCursor(Qt.PointingHandCursor)
-        self.empty_trash_button.clicked.connect(self.empty_trash)
-        button_layout.addWidget(self.empty_trash_button)
-        
-        self.main_layout.setContentsMargins(20, 20, 20, 20)
-        self.main_layout.setSpacing(15)
-        
-        self.main_layout.addLayout(button_layout)
-        
-        self.run_scan()
-        
-    def handle_item_change(self, item):
-        if item.column() == 0:
-            self.update_selection_size_label()
+        self.btn_stop = QPushButton("🛑 Stop")
+        self.btn_stop.clicked.connect(self.stop_scan)
+        self.btn_stop.setEnabled(False)
+        btn_layout.addWidget(self.btn_stop)
 
-    def context_menu_request(self, pos):
-        index = self.table.indexAt(pos)
-        if not index.isValid():
+        self.btn_settings = QPushButton("⚙️ Instellingen")
+        self.btn_settings.clicked.connect(self.open_settings)
+        btn_layout.addWidget(self.btn_settings)
+
+        # --- NIEUW: Selecteer Alles Knop ---
+        self.btn_select_all = QPushButton("✅ Selecteer Alles")
+        self.btn_select_all.clicked.connect(self.toggle_select_all)
+        self.btn_select_all.setEnabled(False) # Pas aan na scan
+        btn_layout.addWidget(self.btn_select_all)
+
+        # --- NIEUW: Toon in Finder Knop ---
+        self.btn_preview = QPushButton("🔍 Toon in Finder")
+        self.btn_preview.clicked.connect(self.preview_file)
+        self.btn_preview.setEnabled(False) 
+        btn_layout.addWidget(self.btn_preview)
+
+        btn_layout.addStretch()
+
+        self.btn_trash = QPushButton("🗑️ Verwijder Selectie")
+        self.btn_trash.setStyleSheet("color: red;")
+        self.btn_trash.setEnabled(False)
+        self.btn_trash.clicked.connect(self.delete_selected)
+        btn_layout.addWidget(self.btn_trash)
+
+        self.btn_empty = QPushButton("⚠️ Leeg Prullenbak")
+        self.btn_empty.setStyleSheet("background-color: #d11; color: white; font-weight: bold;")
+        self.btn_empty.clicked.connect(self.empty_trash)
+        btn_layout.addWidget(self.btn_empty)
+
+        layout.addLayout(btn_layout)
+
+    # --- LOGICA: SCANNEN ---
+
+    def start_scan(self):
+        if self.worker and self.worker.isRunning():
             return
-
-        row = index.row()
-        menu = QMenu(self)
         
-        finder_action = QAction("🔍 Toon in Finder", self)
-        finder_action.triggered.connect(lambda: self._preview_single_file(row))
-        menu.addAction(finder_action)
+        self.table.setRowCount(0)
+        self.ranked_results = []
+        self.btn_scan.setEnabled(False)
+        self.btn_stop.setEnabled(True)
+        self.btn_trash.setEnabled(False)
+        self.btn_preview.setEnabled(False)
+        self.btn_select_all.setEnabled(False)
+        self.progress_bar.show()
         
-        file_path = self.ranked_results[row]['path']
-        exclusions = load_exclusion_list()
+        self.update_disk_stats()
+
+        # Thread starten
+        self.worker = ScanWorker(self.scan_dirs, self.settings)
+        self.worker.progress.connect(self.status_lbl.setText)
+        self.worker.finished.connect(self.on_scan_finished)
+        self.worker.start()
+
+    def stop_scan(self):
+        if self.worker:
+            self.worker.stop()
+            self.status_lbl.setText("🛑 Scan geannuleerd.")
+            self.on_scan_finished([]) # Reset UI state
+
+    def on_scan_finished(self, results):
+        self.btn_scan.setEnabled(True)
+        self.btn_stop.setEnabled(False)
+        self.progress_bar.hide()
         
-        if file_path in exclusions:
-            exclude_action = QAction("✅ Verwijder van Uitsluitingslijst", self)
-            exclude_action.triggered.connect(lambda: self.exclude_file_from_scan(row, False))
-            menu.addAction(exclude_action)
-        else:
-            exclude_action = QAction("❌ Sluit dit Bestand uit van Scan", self)
-            exclude_action.triggered.connect(lambda: self.exclude_file_from_scan(row, True))
-            menu.addAction(exclude_action)
-            
-        menu.addSeparator()
+        if not self.worker.is_running and not results:
+            return # Was cancelled
 
-        delete_action = QAction("🗑️ Verplaats naar Prullenbak", self)
-        delete_action.triggered.connect(lambda: self._delete_single_file(row))
-        menu.addAction(delete_action)
+        self.ranked_results = results
+        self.populate_table()
         
-        menu.exec(self.table.viewport().mapToGlobal(pos))
+        # UI Update
+        self.btn_select_all.setEnabled(len(results) > 0)
+        total_mb = sum(r['size_mb'] for r in results)
+        self.status_lbl.setText(f"✅ Klaar. {len(results)} bestanden gevonden ({total_mb:.1f} MB totaal).")
 
-    def _preview_single_file(self, row):
-        file_path = self.ranked_results[row]['path']
-        subprocess.run(['open', '-R', file_path]) 
-
-    def _delete_single_file(self, row):
-        self.delete_selected(forced_indexes=[row])
-        
-    def exclude_file_from_scan(self, row, exclude=True):
-        file_path = self.ranked_results[row]['path']
-        if exclude:
-            if add_to_exclusion_list(file_path):
-                QMessageBox.information(self, "Uitgesloten", f"'{os.path.basename(file_path)}' is toegevoegd aan de uitsluitingslijst.")
-            else:
-                QMessageBox.critical(self, "Fout", "Kon de uitsluitingslijst niet opslaan.")
-        else:
-            if remove_from_exclusion_list(file_path):
-                 QMessageBox.information(self, "Hersteld", f"'{os.path.basename(file_path)}' is verwijderd van de uitsluitingslijst.")
-            else:
-                QMessageBox.critical(self, "Fout", "Kon de uitsluitingslijst niet opslaan.")
-        self.run_scan()
-
-
-    def update_disk_header(self):
-        stats = get_disk_stats()
-        color = 'green' if stats['percent_free'] > 15 else ('orange' if stats['percent_free'] > 5 else 'red')
-        header_text = (
-            f"Totaal Geheugen: {stats['total_gb']:.2f} GB | "
-            f"Vrij: {stats['free_gb']:.2f} GB | "
-            f"<span style='color: {color};'>Nog Vrij: {stats['percent_free']:.1f}%</span>"
-        )
-        self.disk_header_label.setText(header_text)
-
-    def run_scan(self):
-        self.table.setRowCount(0) 
-        self.status_label.setText(f"Bezig met scannen... Dit kan even duren. Filter: >{self.minimum_size_mb}MB | >{self.minimum_age_days}d")
-        self.update_selection_size_label()
-        QApplication.processEvents() 
-        
-        all_candidates = validate_and_scan(
-            self.top_n_results, 
-            self.minimum_age_days, 
-            self.age_mode, 
-            self.minimum_size_mb
-        )
-        self.ranked_results = all_candidates[:self.top_n_results]
-        self.display_results()
-        
-    def display_results(self):
-        self.table.itemChanged.disconnect(self.handle_item_change) 
-        self.update_disk_header() 
-        
-        if not self.ranked_results:
-            self.status_label.setText("🎉 Scannen voltooid. Geen bestanden gevonden die voldoen aan de criteria.")
-            self.delete_selected_button.setEnabled(False)
-            self.select_all_button.setEnabled(False)
-            self.preview_button.setEnabled(False)
-            self.update_selection_size_label()
-            self.table.itemChanged.connect(self.handle_item_change) 
-            return
-
-        total_size = sum(item['size_mb'] for item in self.ranked_results)
-        translated_age_mode = AGE_MODES.get(self.age_mode, self.age_mode)
-        self.status_label.setText(
-            f"Totaal {len(self.ranked_results)} bestanden gevonden. Totale grootte: {total_size:.2f} MB. "
-            f"Tijdscriterium: {translated_age_mode}. Vink rijen aan om te verwijderen."
-        )
-
+    def populate_table(self):
         self.table.setRowCount(len(self.ranked_results))
-        for i, item in enumerate(self.ranked_results):
-            check_item = QTableWidgetItem()
-            check_item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
-            check_item.setCheckState(Qt.Unchecked)
-            self.table.setItem(i, 0, check_item)
-            
-            num_item = QTableWidgetItem(str(i + 1))
-            num_item.setFlags(Qt.ItemIsEnabled)
-            self.table.setItem(i, 1, num_item)
-
-            size_item = QTableWidgetItem(f"{item['size_mb']:.1f}")
-            size_item.setFlags(Qt.ItemIsEnabled)
-            size_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            self.table.setItem(i, 2, size_item)
-            
-            age_item = QTableWidgetItem(str(int(item['age_days'])))
-            age_item.setFlags(Qt.ItemIsEnabled)
-            age_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            self.table.setItem(i, 3, age_item)
-            
-            type_item = QTableWidgetItem(item['file_type'])
-            type_item.setFlags(Qt.ItemIsEnabled)
-            self.table.setItem(i, 4, type_item)
-            
-            path_item = QTableWidgetItem(item['path'])
-            path_item.setFlags(Qt.ItemIsEnabled)
-            self.table.setItem(i, 5, path_item)
-            
-        self.table.resizeColumnsToContents()
-        self.select_all_button.setEnabled(True)
-        self.update_selection_size_label()
-        self.table.itemChanged.connect(self.handle_item_change) 
+        self.table.blockSignals(True) # Voorkom events tijdens vullen
         
+        for i, item in enumerate(self.ranked_results):
+            # Checkbox
+            chk = QTableWidgetItem()
+            chk.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+            chk.setCheckState(Qt.Unchecked)
+            self.table.setItem(i, 0, chk)
+            
+            # Data
+            self.table.setItem(i, 1, QTableWidgetItem(str(i+1)))
+            self.table.setItem(i, 2, QTableWidgetItem(f"{item['size_mb']:.1f}"))
+            self.table.setItem(i, 3, QTableWidgetItem(str(int(item['age_days']))))
+            self.table.setItem(i, 4, QTableWidgetItem(item['file_type']))
+            self.table.setItem(i, 5, QTableWidgetItem(item['path']))
+            
+        self.table.blockSignals(False)
+
+    # --- LOGICA: VERWIJDEREN EN ACTIES ---
+
+    def on_item_checked(self):
+        count = 0
+        size = 0
+        for i in range(self.table.rowCount()):
+            if self.table.item(i, 0).checkState() == Qt.Checked:
+                count += 1
+                size += self.ranked_results[i]['size_mb']
+        
+        if count > 0:
+            self.btn_trash.setText(f"🗑️ Verwijder {count} items ({size:.1f} MB)")
+            self.btn_trash.setEnabled(True)
+            self.btn_preview.setEnabled(True)
+        else:
+            self.btn_trash.setText("🗑️ Verwijder Selectie")
+            self.btn_trash.setEnabled(False)
+            self.btn_preview.setEnabled(False)
+
     def toggle_select_all(self):
         if self.table.rowCount() == 0:
             return
-        self.table.itemChanged.disconnect(self.handle_item_change) 
-        is_checked = self.table.item(0, 0).checkState() == Qt.Checked
-        new_state = Qt.Unchecked if is_checked else Qt.Checked
+        
+        self.table.blockSignals(True) # Voorkom dat on_item_checked 100x wordt aangeroepen
+        
+        # Check status van eerste item om te bepalen of we alles aan of uit zetten
+        first_checked = self.table.item(0, 0).checkState() == Qt.Checked
+        new_state = Qt.Unchecked if first_checked else Qt.Checked
+        
         for row in range(self.table.rowCount()):
             self.table.item(row, 0).setCheckState(new_state)
-        self.table.itemChanged.connect(self.handle_item_change) 
-        self.update_selection_size_label() 
-
-    def get_checked_rows(self):
-        indexes = []
-        for row in range(self.table.rowCount()):
-            if self.table.item(row, 0) and self.table.item(row, 0).checkState() == Qt.Checked:
-                indexes.append(row)
-        return indexes
+            
+        self.table.blockSignals(False)
+        self.on_item_checked() # Update de knoppen één keer handmatig
 
     def preview_file(self):
-        indexes = self.get_checked_rows()
-        if indexes:
-            file_path = self.ranked_results[indexes[0]]['path'] 
-            subprocess.run(['open', '-R', file_path]) 
-        else:
-            QMessageBox.warning(self, "Geen Selectie", "Vink een item aan om het in Finder te bekijken.")
+        # Zoek het eerste aangevinkte item
+        for i in range(self.table.rowCount()):
+            if self.table.item(i, 0).checkState() == Qt.Checked:
+                path = self.ranked_results[i]['path']
+                subprocess.run(['open', '-R', path])
+                return # Stop na het eerste gevonden bestand
 
+    def delete_selected(self):
+        indexes = [i for i in range(self.table.rowCount()) if self.table.item(i, 0).checkState() == Qt.Checked]
+        if not indexes: return
 
-    def delete_selected(self, forced_indexes=None):
-        indexes_to_delete = forced_indexes if forced_indexes is not None else self.get_checked_rows()
+        items_to_del = [self.ranked_results[i] for i in indexes]
+        confirm = QMessageBox.question(self, "Bevestigen", f"Verplaats {len(items_to_del)} bestanden naar Prullenbak?")
+        
+        if confirm == QMessageBox.Yes:
+            self.del_worker = DeleteWorker(items_to_del)
+            self.del_worker.finished.connect(self.on_delete_finished)
+            self.del_worker.start()
+            self.btn_trash.setEnabled(False)
+            self.status_lbl.setText("⏳ Bezig met verplaatsen...")
 
-        if not indexes_to_delete:
-            QMessageBox.warning(self, "Geen Selectie", "Vink de bestanden aan die u wilt verwijderen.")
-            return
-            
-        selected_size_display = self.selected_size_mb if forced_indexes is None else sum(self.ranked_results[i]['size_mb'] for i in indexes_to_delete)
-            
-        reply = QMessageBox.question(self, 'Bevestigen', 
-                                     f"Weet u zeker dat u {len(indexes_to_delete)} bestanden ({selected_size_display:.2f} MB) naar de Prullenbak wilt verplaatsen?",
-                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-
-        if reply == QMessageBox.Yes:
-            action_log = execute_deletion(self.ranked_results, indexes_to_delete)
-            
-            verplaatste_bestanden = [l for l in action_log if l.startswith('VERPLAATST')]
-            try:
-                verplaatste_grootte = sum(float(l.split(':')[1].split(' MB')[0].strip()) for l in verplaatste_bestanden)
-            except Exception:
-                verplaatste_grootte = 0 
-                
-            total_deleted = len(verplaatste_bestanden)
-            
-            QMessageBox.information(self, "Opschoning Voltooid", 
-                                      f"✅ {total_deleted} bestanden ({verplaatste_grootte:.2f} MB) zijn succesvol verplaatst naar de Prullenbak.\n\n"
-                                      f"U kunt nu de Prullenbak legen.")
-            
-            self.run_scan() 
+    def on_delete_finished(self, msg):
+        QMessageBox.information(self, "Voltooid", msg)
+        self.start_scan() # Ververs lijst
 
     def empty_trash(self):
-        command = ['osascript', '-e', 'tell application "Finder" to empty trash'] 
-        reply = QMessageBox.question(self, 'Prullenbak Legen Bevestigen', 
-                                     "⚠️ LET OP: Weet u zeker dat u DE HELE macOS Prullenbak permanent wilt legen? Alle items worden onherroepelijk verwijderd!",
-                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-                                     
-        if reply == QMessageBox.Yes:
-            try:
-                self.status_label.setText("🗑️ Prullenbak wordt geleegd...")
-                QApplication.processEvents()
-                subprocess.run(command, check=True)
-                QMessageBox.information(self, "Prullenbak Geleegd", "✅ De Prullenbak is geleegd!")
-            except subprocess.CalledProcessError:
-                 QMessageBox.critical(self, "Fout", "❌ Kon de Prullenbak niet legen.")
-            self.update_disk_header() 
-            self.update_status_label() 
+        confirm = QMessageBox.warning(self, "PAS OP", "Dit leegt de HELE Prullenbak. Dit kan niet ongedaan gemaakt worden!", QMessageBox.Yes | QMessageBox.No)
+        if confirm == QMessageBox.Yes:
+            subprocess.run(['osascript', '-e', 'tell application "Finder" to empty trash'])
+            self.update_disk_stats()
 
+    # --- DIVERSEN ---
+
+    def update_disk_stats(self):
+        s = engine.get_disk_stats()
+        color = "green" if s['percent_free'] > 20 else "orange" if s['percent_free'] > 10 else "red"
+        self.header_lbl.setText(f"Vrij: {s['free_gb']:.1f} GB ({s['total_gb']:.0f} GB totaal) - <span style='color:{color}'>{s['percent_free']:.1f}% beschikbaar</span>")
+
+    def show_context_menu(self, pos):
+        idx = self.table.indexAt(pos)
+        if not idx.isValid(): return
+        
+        row = idx.row()
+        path = self.ranked_results[row]['path']
+        
+        menu = QMenu()
+        act_open = QAction("🔍 Toon in Finder", self)
+        act_open.triggered.connect(lambda: subprocess.run(['open', '-R', path]))
+        menu.addAction(act_open)
+        
+        act_exclude = QAction("🚫 Sluit dit bestand voortaan uit", self)
+        act_exclude.triggered.connect(lambda: self.exclude_file(path))
+        menu.addAction(act_exclude)
+        
+        menu.exec(self.table.viewport().mapToGlobal(pos))
+
+    def exclude_file(self, path):
+        engine.toggle_exclusion(path, True)
+        self.start_scan()
+
+    def open_settings(self):
+        dlg = SettingsDialog(self, self.settings, self.scan_dirs)
+        if dlg.exec():
+            new_settings, new_dirs = dlg.get_data()
+            self.settings = new_settings
+            self.scan_dirs = new_dirs
+            self.save_settings()
+            self.start_scan()
 
 if __name__ == '__main__':
-    if sys.platform == 'darwin':
-        os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
-        QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
-        QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
-        
     app = QApplication(sys.argv)
-    
-    # 🎨 PAS STYLING TOE
-    app.setStyleSheet(MODERN_STYLESHEET)
+    # Geen hardcoded stylesheets meer -> systeem thema wordt gebruikt!
+    # Alleen wat tweaks voor padding in de tabellen
+    app.setStyleSheet("QTableWidget::item { padding: 5px; } QHeaderView::section { padding: 5px; }")
     
     window = SafeMacCleanerApp()
     window.show()
