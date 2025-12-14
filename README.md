@@ -1,103 +1,138 @@
-````markdown
-# 🔎 Safe Mac Cleaner (SMC) v3.8 - The GUI Edition
+# 🔎 Safe Mac Cleaner (SMC) v3.8 – The GUI Edition
 
-**SMC v3.8** is een lichtgewicht, console-gebaseerde logica, verpakt in een krachtige **PySide6 Graphical User Interface (GUI)** voor veilige en doelgerichte schijfopruiming op macOS.
+**Safe Mac Cleaner (SMC) v3.8** is een lichte, voorspelbare macOS-app voor veilige schijfopruiming. De kern bestaat uit eenvoudige, betrouwbare Python-logica, verpakt in een overzichtelijke **PySide6 GUI**. Geen automatische deletes, geen cloud, geen verborgen acties — volledige controle blijft altijd bij de gebruiker.
 
-Dit project stelt de gebruiker in staat om:
-* De actuele schijfstatus (GB Vrij / % Vrij) te zien.
-* Oude, grote bestanden te identificeren via aanpasbare filters.
-* Geselecteerde bestanden veilig naar de Prullenbak te verplaatsen met behulp van checkboxes.
-* De Prullenbak direct vanuit de app te legen.
+Met deze app kun je:
+
+* In één oogopslag zien hoeveel schijfruimte vrij is (GB en %)
+* Oude en grote bestanden vinden met aanpasbare filters
+* Bestanden selecteren via checkboxes en veilig naar de Prullenbak verplaatsen
+* De Prullenbak direct vanuit de app legen
+
+---
 
 ## 🔑 Kernprincipes & Veiligheid
 
-* **Veilige Zones:** Scant uitsluitend de gebruikersmappen (`Downloads`, `Desktop`, `Documents`, `Movies`). Kritieke systeemmappen worden geblokkeerd.
-* **Omkeerbare Actie:** Bestanden worden **nooit permanent verwijderd** (alleen verplaatst naar de macOS Prullenbak).
-* **Dynamische Controle:** Alle filters (grootte, ouderdom, aantal getoonde items) zijn aanpasbaar via het Instellingenmenu in de GUI.
+* **Beperkte scanzones**
+  Alleen gebruikersmappen worden gescand: `Downloads`, `Desktop`, `Documents`, `Movies`.
+  Systeem- en kritieke mappen zijn expliciet uitgesloten.
+
+* **Altijd omkeerbaar**
+  Bestanden worden nooit permanent verwijderd. Alles verloopt via de macOS Prullenbak.
+
+* **Gebruiker aan het stuur**
+  Grootte-, ouderdom- en limietfilters zijn volledig instelbaar via de GUI.
+
+---
 
 ## 🛠️ Installatie & Voorbereiding
 
-Dit project vereist Python 3 en de volgende externe modules: `PySide6` (voor de GUI), `psutil` (voor schijfstatistieken) en `send2trash`.
+### Vereisten
 
-### 1. Modules Installeren
+* macOS
+* Python 3
+* Externe Python-modules:
 
-Open uw Terminal in de projectmap (`safe-mac-cleaner`) en installeer de vereiste modules:
+  * `PySide6` (GUI)
+  * `psutil` (schijfstatistieken)
+  * `send2trash` (veilige bestandsverplaatsing)
 
-```bash
+### Modules installeren
+
+Open Terminal in de projectmap (`safe-mac-cleaner`) en installeer de vereiste modules:
+
+```
 pip3 install PySide6 psutil send2trash
-````
-
-### 2. Snel starten via VS Code (Aanbevolen)
-
-Om de applicatie direct met één klik te starten vanuit VS Code, moet u een Task instellen.
-
-**Stappen:**
-
-1. Ga in VS Code naar het menu **Terminal** > **Configure Tasks...**
-2. Kies "Create tasks.json file from template" en selecteer dan "Others".
-3. Vervang de inhoud van het nieuwe bestand `.vscode/tasks.json` door de volgende code:
-
-```json
-{
-    "version": "2.0.0",
-    "tasks": [
-        {
-            "label": "Start Safe Mac Cleaner GUI",
-            "type": "shell",
-            "command": "/usr/bin/python3",
-            "args": [
-                "${workspaceFolder}/smc_gui.py"
-            ],
-            "group": "build",
-            "presentation": {
-                "reveal": "always",
-                "panel": "new"
-            }
-        }
-    ]
-}
 ```
 
-Nadat u dit bestand heeft opgeslagen, kunt u de app starten via **Terminal > Run Task... > Start Safe Mac Cleaner GUI** (of met de sneltoets **⇧⌘B**).
+---
 
-### 3. Handmatig Starten
+## 🚀 Opstartinstructies
 
-Voer het script direct uit in de Terminal:
+Zodra de vereiste modules zijn geïnstalleerd, kun je Safe Mac Cleaner op twee manieren starten: via VS Code (aanbevolen) of handmatig via de Terminal.
 
-```bash
+### 1. Starten via VS Code Task (aanbevolen)
+
+Dit is de snelste en meest betrouwbare manier tijdens gebruik en ontwikkeling.
+
+1. Zorg dat het bestand **`.vscode/tasks.json`** aanwezig is in de projectmap
+2. Open het project in VS Code
+3. Ga naar **Terminal → Run Task…**
+4. Kies **Start Safe Mac Cleaner GUI**
+
+Optioneel kun je de app ook starten met de sneltoets **⇧⌘B** (Shift + Command + B).
+
+### 2. Handmatig starten via Terminal
+
+Gebruik deze methode als je VS Code niet gebruikt.
+
+1. Open Terminal
+2. Navigeer naar de projectmap `safe-mac-cleaner`
+3. Start de applicatie met:
+
+```
 /usr/bin/python3 smc_gui.py
 ```
 
-## ⚙️ Applicatie Functies
+Het gebruik van het absolute Python-pad voorkomt problemen met virtuele omgevingen of verkeerde Python-versies.
 
-De GUI bevat de volgende primaire elementen en controles:
+---
+
+## ⚙️ Applicatie-overzicht
 
 ### 🔧 Instellingenmenu
 
-Via **Instellingen > Pas Filters Aan...** in de menubalk kunt u de scanfilters voor de volgende scan aanpassen:
+Via **Instellingen → Pas Filters Aan…** stel je in wat een relevant bestand is voor de volgende scan:
 
-| Instelling                    | Standaardwaarde | Functie                                                 |
-| :---------------------------- | :-------------- | :------------------------------------------------------ |
-| **Max. Aantal Resultaten**    | `100`           | Beperkt de weergave van de grootste items.              |
-| **Minimale Ouderdom (Dagen)** | `7`             | Hoe oud moet een bestand zijn om getoond te worden.     |
-| **Minimale Grootte (MB)**     | `1`             | Minimale grootte (in MB) van bestanden om mee te nemen. |
+| Instelling                | Standaard | Betekenis                                     |
+| ------------------------- | --------- | --------------------------------------------- |
+| Max. aantal resultaten    | 100       | Beperkt het aantal getoonde bestanden         |
+| Minimale ouderdom (dagen) | 7         | Bestanden jonger dan dit worden genegeerd     |
+| Minimale grootte (MB)     | 1         | Neemt alleen bestanden boven deze grootte mee |
 
-### 🖼️ Tabel & Selectie
+---
 
-De tabel toont de gevonden bestanden (gesorteerd op grootte):
+### 🖼️ Resultatentabel
 
-* **Selecteer:** Gebruik de checkboxen om losse bestanden te selecteren voor verwijdering.
-* **#:** Sequentiële nummering voor overzicht.
-* **Grootte & Ouderdom:** De kritieke data voor besluitvorming.
+Bestanden worden gesorteerd op grootte voor snelle besluitvorming.
 
-### ⬇️ Actie Knoppen (Onderkant)
+* Checkbox per bestand voor selectie
+* Volgnummer voor overzicht
+* Grootte en ouderdom als primaire beslisinformatie
 
-| Knop                                            | Actie                                                                               |
-| :---------------------------------------------- | :---------------------------------------------------------------------------------- |
-| **🚀 Start Nieuwe Scan**                        | Herstart de scan met de laatst ingestelde filters.                                  |
-| **✅ Selecteer Alles**                           | Vinkt alle getoonde items aan of uit.                                               |
-| **🔍 Toon Selectie in Finder**                  | Opent de locatie van het eerst aangevinkte bestand in Finder voor context.          |
-| **🗑️ Verplaats Geselecteerde naar Prullenbak** | Verplaatst alle aangevinkte items naar de macOS Prullenbak.                         |
-| **🗑️ Leeg Prullenbak**                         | Start het macOS-proces om de Prullenbak permanent te legen (vraagt om bevestiging). |
+---
 
-```
+### ⬇️ Actieknoppen (onderzijde)
+
+| Knop                      | Functie                                     |
+| ------------------------- | ------------------------------------------- |
+| Start nieuwe scan         | Draait een nieuwe scan met huidige filters  |
+| Selecteer alles           | Selecteert of deselecteert alle items       |
+| Toon in Finder            | Opent het geselecteerde bestand in Finder   |
+| Verplaats naar Prullenbak | Verplaatst geselecteerde bestanden          |
+| Leeg Prullenbak           | Leegt de macOS Prullenbak (met bevestiging) |
+
+---
+
+## ❌ Bewuste beperkingen
+
+Safe Mac Cleaner is bewust **beperkt in scope**. Alles wat extra risico, complexiteit of onduidelijk gedrag introduceert, is expliciet weggelaten.
+
+De applicatie doet **niet** het volgende:
+
+* ❌ Geen automatische of geplande scans op de achtergrond
+* ❌ Geen permanente verwijdering van bestanden (altijd via Prullenbak)
+* ❌ Geen toegang tot systeemmappen of verborgen OS-paden
+* ❌ Geen cloud-sync, upload of externe communicatie
+* ❌ Geen slimme heuristieken of "AI-beslissingen" over wat weg mag
+
+Elke actie vereist expliciete gebruikersinput en bevestiging.
+
+---
+
+## 🎯 Doel van dit project
+
+Safe Mac Cleaner is gebouwd als **persoonlijke utility**: klein, voorspelbaar en veilig.
+Geen commerciële intentie, geen tracking, geen cloud-integratie.
+
+De app doet precies één ding goed: je helpen bewust en gecontroleerd schijfruimte vrij te maken — zonder risico op dataverlies.
