@@ -1,66 +1,37 @@
-import sys
 import os
-import subprocess
-from pathlib import Path
+import sys
+
+from PySide6.QtCore import QSettings, Qt
+from PySide6.QtGui import QAction, QIcon, QPixmap
+from PySide6.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QDialog,
+    QFileDialog,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QListWidget,
+    QMainWindow,
+    QMenu,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QSpinBox,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
+
+import platform_macos
 
 # Importeer de engine
 import smc_cleaner as engine
-
-from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
-    QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, 
-    QMessageBox, QLabel, QSpacerItem, QSizePolicy, QDialog, 
-    QFormLayout, QLineEdit, QComboBox, QMenu, QProgressBar, 
-    QListWidget, QGroupBox, QFileDialog, QFrame
-)
-from PySide6.QtCore import Qt, QSettings, QThread, Signal
-from PySide6.QtGui import QAction, QIcon, QPixmap, QColor
-
-# =======================================================
-# 🧵 WORKER THREADS
-# =======================================================
-
-class ScanWorker(QThread):
-    finished = Signal(list, list)
-    progress = Signal(str)
-    
-    def __init__(self, directories, settings):
-        super().__init__()
-        self.directories = directories
-        self.settings = settings
-        self.is_running = True
-
-    def run(self):
-        results, errors = engine.scan_disk(
-            directories=self.directories,
-            min_size_mb=self.settings['size'],
-            min_age_days=self.settings['age'],
-            age_mode=self.settings['mode'],
-            top_n=self.settings['top_n'],
-            progress_callback=self.emit_progress,
-            should_stop=lambda: not self.is_running
-        )
-        if self.is_running:
-            self.finished.emit(results, errors)
-
-    def emit_progress(self, msg):
-        self.progress.emit(msg)
-
-    def stop(self):
-        self.is_running = False
-
-class DeleteWorker(QThread):
-    finished = Signal(str)
-
-    def __init__(self, items):
-        super().__init__()
-        self.items = items
-
-    def run(self):
-        log = engine.delete_files(self.items)
-        success_count = len([l for l in log if "VERPLAATST" in l])
-        total_mb = sum(item['size_mb'] for item in self.items)
-        self.finished.emit(f"✅ {success_count} bestanden ({total_mb:.1f} MB) verplaatst naar Prullenbak.")
+from models import ScanSettings
+from workers import DeleteWorker, ScanWorker
 
 # =======================================================
 # ⚙️ INSTELLINGEN SCHERM
@@ -77,13 +48,19 @@ class SettingsDialog(QDialog):
         filter_group = QGroupBox("Scan Filters")
         form_layout = QFormLayout()
         
-        self.top_n_input = QLineEdit(str(current_settings['top_n']))
+        self.top_n_input = QSpinBox()
+        self.top_n_input.setRange(1, 10000)
+        self.top_n_input.setValue(current_settings['top_n'])
         form_layout.addRow("Max. resultaten:", self.top_n_input)
         
-        self.age_input = QLineEdit(str(current_settings['age']))
+        self.age_input = QSpinBox()
+        self.age_input.setRange(0, 36500)
+        self.age_input.setValue(current_settings['age'])
         form_layout.addRow("Minimale ouderdom (dagen):", self.age_input)
         
-        self.size_input = QLineEdit(str(current_settings['size']))
+        self.size_input = QSpinBox()
+        self.size_input.setRange(0, 1000000)
+        self.size_input.setValue(current_settings['size'])
         form_layout.addRow("Minimale grootte (MB):", self.size_input)
         
         self.mode_combo = QComboBox()
@@ -125,6 +102,15 @@ class SettingsDialog(QDialog):
     def add_dir(self):
         d = QFileDialog.getExistingDirectory(self, "Kies een map")
         if d:
+            valid_dirs, errors = engine.validate_scan_directories([d])
+            if not valid_dirs:
+                QMessageBox.warning(
+                    self,
+                    "Ongeldige scanmap",
+                    "Kies een map binnen je eigen home-directory.\n\n" + "\n".join(errors),
+                )
+                return
+            d = valid_dirs[0]
             items = [self.dir_list.item(i).text() for i in range(self.dir_list.count())]
             if d not in items:
                 self.dir_list.addItem(d)
@@ -138,9 +124,9 @@ class SettingsDialog(QDialog):
         mode_key = self.mode_combo.itemData(idx)
         
         settings = {
-            'top_n': int(self.top_n_input.text()),
-            'age': int(self.age_input.text()),
-            'size': int(self.size_input.text()),
+            'top_n': self.top_n_input.value(),
+            'age': self.age_input.value(),
+            'size': self.size_input.value(),
             'mode': mode_key
         }
         dirs = [self.dir_list.item(i).text() for i in range(self.dir_list.count())]
@@ -178,13 +164,14 @@ class SafeMacCleanerApp(QMainWindow):
         self.start_scan()
 
     def load_settings(self):
-        self.scan_dirs = self.prefs.value("scan_dirs", engine.DEFAULT_SCAN_DIRS)
-        self.settings = {
-            'top_n': int(self.prefs.value("top_n", engine.DEFAULT_TOP_N)),
-            'age': int(self.prefs.value("age", engine.DEFAULT_MIN_AGE_DAYS)),
-            'size': int(self.prefs.value("size", engine.DEFAULT_MIN_SIZE_MB)),
-            'mode': self.prefs.value("mode", engine.DEFAULT_AGE_MODE)
-        }
+        raw_dirs = self.prefs.value("scan_dirs", engine.DEFAULT_SCAN_DIRS)
+        self.scan_dirs = [raw_dirs] if isinstance(raw_dirs, str) else list(raw_dirs)
+        self.settings = ScanSettings.from_values(
+            self.prefs.value("top_n", engine.DEFAULT_TOP_N),
+            self.prefs.value("age", engine.DEFAULT_MIN_AGE_DAYS),
+            self.prefs.value("size", engine.DEFAULT_MIN_SIZE_MB),
+            self.prefs.value("mode", engine.DEFAULT_AGE_MODE),
+        ).as_dict()
 
     def save_settings(self):
         self.prefs.setValue("scan_dirs", self.scan_dirs)
@@ -332,22 +319,36 @@ class SafeMacCleanerApp(QMainWindow):
 
         self.worker = ScanWorker(self.scan_dirs, self.settings)
         self.worker.progress.connect(self.status_lbl.setText)
-        self.worker.finished.connect(self.on_scan_finished)
+        self.worker.completed.connect(self.on_scan_finished)
+        self.worker.cancelled.connect(self.on_scan_cancelled)
+        self.worker.failed.connect(self.on_scan_failed)
+        self.worker.finished.connect(self.worker.deleteLater)
         self.worker.start()
 
     def stop_scan(self):
         if self.worker:
             self.worker.stop()
+            self.btn_stop.setEnabled(False)
             self.status_lbl.setText("🛑 Scan geannuleerd.")
-            self.on_scan_finished([], [])
+
+    def on_scan_cancelled(self):
+        self.btn_scan.setEnabled(True)
+        self.btn_stop.setEnabled(False)
+        self.progress_bar.hide()
+        self.status_lbl.setText("🛑 Scan geannuleerd.")
+
+    def on_scan_failed(self, message):
+        self.btn_scan.setEnabled(True)
+        self.btn_stop.setEnabled(False)
+        self.progress_bar.hide()
+        self.status_lbl.setText("❌ Scan mislukt.")
+        QMessageBox.critical(self, "Scan mislukt", message)
 
     def on_scan_finished(self, results, errors):
         self.btn_scan.setEnabled(True)
         self.btn_stop.setEnabled(False)
         self.progress_bar.hide()
         
-        if not self.worker.is_running and not results and not errors: return
-
         self.ranked_results = results
         self.scan_errors = errors
         
@@ -417,7 +418,7 @@ class SafeMacCleanerApp(QMainWindow):
         for i in range(self.table.rowCount()):
             if self.table.item(i, 0).checkState() == Qt.Checked:
                 path = self.ranked_results[i]['path']
-                subprocess.run(['open', '-R', path])
+                platform_macos.reveal_in_finder(path)
                 return
 
     def delete_selected(self):
@@ -427,19 +428,40 @@ class SafeMacCleanerApp(QMainWindow):
         confirm = QMessageBox.question(self, "Bevestigen", f"Verplaats {len(items_to_del)} bestanden naar Prullenbak?", QMessageBox.Yes | QMessageBox.No)
         if confirm == QMessageBox.Yes:
             self.del_worker = DeleteWorker(items_to_del)
-            self.del_worker.finished.connect(self.on_delete_finished)
+            self.del_worker.completed.connect(self.on_delete_finished)
+            self.del_worker.failed.connect(self.on_delete_failed)
+            self.del_worker.finished.connect(self.del_worker.deleteLater)
             self.del_worker.start()
             self.btn_trash.setEnabled(False)
             self.status_lbl.setText("⏳ Bezig met verplaatsen...")
 
     def on_delete_finished(self, msg):
-        QMessageBox.information(self, "Voltooid", msg)
+        result = msg
+        succeeded = len(result['succeeded'])
+        failed = result['failed']
+        message = f"{succeeded} bestanden naar de Prullenbak verplaatst ({result['total_size_mb']:.1f} MB)."
+        if failed:
+            message += f"\n\n{len(failed)} bestanden konden niet worden verplaatst."
+            message += "\n" + "\n".join(f"{item['path']}: {item['error']}" for item in failed[:5])
+        QMessageBox.information(self, "Verwijderen voltooid", message)
         self.start_scan()
+
+    def on_delete_failed(self, message):
+        self.btn_trash.setEnabled(True)
+        self.status_lbl.setText("❌ Verwijderen mislukt.")
+        QMessageBox.critical(self, "Verwijderen mislukt", message)
 
     def empty_trash(self):
         confirm = QMessageBox.warning(self, "PAS OP", "Dit leegt de HELE Prullenbak. Dit kan niet ongedaan gemaakt worden!", QMessageBox.Yes | QMessageBox.No)
         if confirm == QMessageBox.Yes:
-            subprocess.run(['osascript', '-e', 'tell application "Finder" to empty trash'])
+            succeeded, error = platform_macos.empty_trash()
+            if not succeeded:
+                QMessageBox.critical(
+                    self,
+                    "Prullenbak legen mislukt",
+                    error,
+                )
+                return
             self.update_disk_stats()
 
     def update_disk_stats(self):
@@ -454,7 +476,7 @@ class SafeMacCleanerApp(QMainWindow):
         path = self.ranked_results[row]['path']
         menu = QMenu()
         act_open = QAction("🔍 Toon in Finder", self)
-        act_open.triggered.connect(lambda: subprocess.run(['open', '-R', path]))
+        act_open.triggered.connect(lambda: platform_macos.reveal_in_finder(path))
         menu.addAction(act_open)
         act_exclude = QAction("🚫 Sluit dit bestand voortaan uit", self)
         act_exclude.triggered.connect(lambda: self.exclude_file(path))

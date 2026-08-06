@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "safe-mac-cleaner"
+version = "2.0.0"
+description = "A transparent and safe macOS disk cleanup utility."
+requires-python = ">=3.10"
+dependencies = [
+    "PySide6>=6.6",
+    "psutil>=5.9",
+    "send2trash>=1.8",
+]
+
+[tool.setuptools]
+py-modules = ["models", "platform_macos", "smc_cleaner", "smc_gui", "workers", "maak_icoon"]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+ignore = ["BLE001", "LOG015", "PLW1510", "UP006", "UP035", "UP045"]

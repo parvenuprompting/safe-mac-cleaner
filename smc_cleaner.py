@@ -1,11 +1,14 @@
-import os
-import time
-import psutil
 import json
 import logging
+import os
+import time
 from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
+import psutil
 from send2trash import send2trash
-from typing import List, Dict, Optional, Callable, Any, Tuple
+
+logger = logging.getLogger(__name__)
 
 # =======================================================
 # ⚙️ CONFIGURATIE & CONSTANTEN
@@ -37,6 +40,8 @@ DEFAULT_SCAN_DIRS = [
     str(Path.home() / "Music"),
 ]
 
+HOME_PATH = Path.home().resolve()
+
 AGE_MODES = {
     "last_used": "Laatst gebruikt (Access Time)",
     "last_modified": "Laatst gewijzigd (Modify Time)"
@@ -58,9 +63,38 @@ def get_disk_stats() -> Dict[str, float]:
             'free_gb': disk_info.free / (1024**3),
             'percent_free': 100.0 - disk_info.percent,
         }
-    except Exception as e:
-        logging.error(f"Fout bij ophalen schijfinfo: {e}")
+    except Exception:
+        logger.exception("Fout bij ophalen schijfinfo")
         return {'total_gb': 0.0, 'free_gb': 0.0, 'percent_free': 0.0}
+
+
+def validate_scan_directories(directories: List[str]) -> Tuple[List[str], List[str]]:
+    """Return existing directories below the user's home directory only."""
+    valid = []
+    errors = []
+    seen = set()
+
+    for directory in directories:
+        try:
+            path = Path(directory).expanduser().resolve(strict=True)
+            path.relative_to(HOME_PATH)
+            if path == HOME_PATH or not path.is_dir():
+                raise ValueError("scanroot moet een submap van de home-directory zijn")
+            path_string = str(path)
+            if path_string not in seen:
+                valid.append(path_string)
+                seen.add(path_string)
+        except (OSError, RuntimeError, ValueError) as error:
+            errors.append(f"{directory}: {error}")
+
+    # A parent scanroot already includes all of its child scanroots.
+    valid.sort(key=len)
+    non_overlapping = []
+    for path_string in valid:
+        path = Path(path_string)
+        if not any(path.is_relative_to(parent) for parent in non_overlapping):
+            non_overlapping.append(path)
+    return [str(path) for path in non_overlapping], errors
 
 # ==================================
 # 🛡️ EXCLUSIE LIJST BEHEER
@@ -70,14 +104,19 @@ def load_exclusion_list() -> List[str]:
     if not EXCLUSION_FILE.exists():
         return []
     try:
-        with open(EXCLUSION_FILE, 'r') as f:
-            return json.load(f)
-    except Exception as e:
-        logging.error(f"Kon exclusielijst niet laden: {e}")
+        with EXCLUSION_FILE.open('r') as f:
+            exclusions = json.load(f)
+        if not isinstance(exclusions, list) or not all(isinstance(path, str) for path in exclusions):
+            raise ValueError("uitsluitingen moeten een lijst met paden zijn")
+        return exclusions
+    except Exception:
+        logger.exception("Kon exclusielijst niet laden")
         return []
 
 def toggle_exclusion(path: str, add: bool = True) -> bool:
+    path = str(Path(path).expanduser().resolve())
     current = load_exclusion_list()
+    current = [str(Path(item).expanduser().resolve()) for item in current]
     try:
         if add:
             if path not in current:
@@ -86,11 +125,13 @@ def toggle_exclusion(path: str, add: bool = True) -> bool:
             if path in current:
                 current.remove(path)
         
-        with open(EXCLUSION_FILE, 'w') as f:
+        temporary_file = EXCLUSION_FILE.with_suffix('.tmp')
+        with temporary_file.open('w') as f:
             json.dump(current, f, indent=4)
+        temporary_file.replace(EXCLUSION_FILE)
         return True
-    except Exception as e:
-        logging.error(f"Fout bij bijwerken exclusielijst: {e}")
+    except Exception:
+        logger.exception("Fout bij bijwerken exclusielijst")
         return False
 
 # ==================================
@@ -153,7 +194,11 @@ def _scan_recursive(
                             "path": entry.path,
                             "size_mb": size_mb,
                             "age_days": age_days,
-                            "file_type": Path(name).suffix or 'file'
+                            "file_type": Path(name).suffix or 'file',
+                            "_st_dev": stat.st_dev,
+                            "_st_ino": stat.st_ino,
+                            "_st_size": stat.st_size,
+                            "_st_mtime_ns": stat.st_mtime_ns,
                         })
 
                     except (OSError, PermissionError):
@@ -162,8 +207,8 @@ def _scan_recursive(
 
     except PermissionError:
         errors.append(directory)
-    except Exception as e:
-        logging.warning(f"Scan fout in {directory}: {e}")
+    except Exception:
+        logger.exception("Scan fout in %s", directory)
 
 def scan_disk(
     directories: List[str],
@@ -179,10 +224,11 @@ def scan_disk(
     """
     candidates = []
     errors = []
-    exclusions = set(load_exclusion_list())
+    exclusions = {str(Path(path).expanduser().resolve()) for path in load_exclusion_list()}
     
     # Valideer input
-    valid_dirs = [d for d in directories if os.path.isdir(d)]
+    valid_dirs, directory_errors = validate_scan_directories(directories)
+    errors.extend(directory_errors)
     
     for folder in valid_dirs:
         if should_stop and should_stop(): break
@@ -205,20 +251,37 @@ def scan_disk(
     
     return candidates[:top_n], errors
 
-def delete_files(files: List[Dict[str, Any]], dry_run: bool = False) -> List[str]:
-    """Verwijdert bestanden via de Prullenbak."""
-    log = []
+def delete_files(files: List[Dict[str, Any]], dry_run: bool = False) -> Dict[str, Any]:
+    """Move verified files to the Trash and return separate success/failure results."""
+    succeeded = []
+    failed = []
     for item in files:
         path = item['path']
         try:
+            resolved_path = Path(path).resolve(strict=True)
+            resolved_path.relative_to(HOME_PATH)
+            current = os.stat(path, follow_symlinks=False)
+            expected = (
+                item.get('_st_dev'),
+                item.get('_st_ino'),
+                item.get('_st_size'),
+                item.get('_st_mtime_ns'),
+            )
+            actual = (current.st_dev, current.st_ino, current.st_size, current.st_mtime_ns)
+            if any(value is not None for value in expected) and actual != expected:
+                raise RuntimeError("bestand is gewijzigd sinds de scan")
+            if not os.path.isfile(path):
+                raise RuntimeError("pad is geen regulier bestand")
             if not dry_run:
                 send2trash(path)
-                log.append(f"VERPLAATST: {path}")
-            else:
-                log.append(f"DRY-RUN: {path}")
+            succeeded.append(path)
         except Exception as e:
-            log.append(f"FOUT: {path} - {e}")
-    return log
+            failed.append({"path": path, "error": str(e)})
+    return {
+        "succeeded": succeeded,
+        "failed": failed,
+        "total_size_mb": sum(item.get('size_mb', 0) for item in files if item['path'] in succeeded),
+    }
 
 # ==================================
 # 🧪 TEST BLOK

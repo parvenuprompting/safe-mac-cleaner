@@ -1,6 +1,13 @@
-# 🔎 Safe Mac Cleaner 
+# Safe Mac Cleaner
 
-Safe Mac Cleaner is een lichte, voorspelbare macOS-app voor veilige schijfopruiming. De kern bestaat uit eenvoudige, betrouwbare Python-logica, verpakt in een overzichtelijke **PySide6 GUI**. Geen automatische deletes, geen cloud, geen verborgen acties — volledige controle blijft altijd bij de gebruiker.
+[![CI](https://github.com/parvenuprompting/safe-mac-cleaner/actions/workflows/ci.yml/badge.svg)](https://github.com/parvenuprompting/safe-mac-cleaner/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Platform](https://img.shields.io/badge/platform-macOS-000000?logo=apple&logoColor=white)](https://www.apple.com/macos/)
+[![License](https://img.shields.io/badge/license-not%20specified-lightgrey)](https://github.com/parvenuprompting/safe-mac-cleaner)
+
+Safe Mac Cleaner is een lichte, voorspelbare macOS-app voor veilige schijfopruiming. De kern bestaat uit Python-logica, verpakt in een overzichtelijke **PySide6 GUI**. Geen automatische deletes, geen cloud, geen verborgen acties: volledige controle blijft bij de gebruiker.
+
+De applicatie is momenteel een persoonlijke utility in actieve v2-ontwikkeling. De nadruk ligt op transparantie, veilige defaults en acties die de gebruiker kan controleren.
 
 Met deze app kun je:
 
@@ -16,14 +23,16 @@ Met deze app kun je:
 
 ### Veilige zoekgebieden
 
-Alleen gebruikersmappen worden gescand:
+Alleen bestaande submappen van de huidige gebruikers-home-directory kunnen worden gescand:
 
 * `Downloads`
 * `Desktop`
 * `Documents`
 * `Movies`
+* `Pictures`
+* `Music`
 
-Systeem- en kritieke mappen zijn expliciet uitgesloten.
+Systeem- en kritieke mappen, de home-directory zelf en paden buiten de home-directory worden geweigerd. Overlappende scanmappen worden automatisch samengevoegd.
 
 ### Altijd omkeerbaar
 
@@ -37,29 +46,28 @@ Bestanden worden nooit permanent verwijderd door de app zelf. Alles verloopt via
 
 ---
 
-## 🛠️ Installatie & Voorbereiding
+## Installatie & Voorbereiding
 
 ### Vereisten
 
 * macOS
-* Python 3
-* Externe Python-modules:
-
-  * `PySide6` (GUI)
-  * `psutil` (schijfstatistieken)
-  * `send2trash` (veilige bestandsverplaatsing)
+* Python 3.10 of nieuwer
+* macOS voor de GUI en Finder-integratie
 
 ### Modules installeren
 
-Open Terminal in de projectmap (`safe-mac-cleaner`) en installeer de vereiste modules:
+Maak vanuit de projectmap (`safe-mac-cleaner`) een virtuele omgeving en installeer de applicatie inclusief ontwikkeltools:
 
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -e '.[dev]'
 ```
-pip3 install PySide6 psutil send2trash
-```
+
+De runtime-dependencies zijn `PySide6`, `psutil` en `send2trash`. De extra ontwikkeltools bevatten `pytest` en `ruff`.
 
 ---
 
-## 🚀 Opstartinstructies
+## Opstartinstructies
 
 Zodra de vereiste modules zijn geïnstalleerd, kun je Safe Mac Cleaner op twee manieren starten: via VS Code (aanbevolen) of handmatig via de Terminal.
 
@@ -78,11 +86,20 @@ Optioneel kun je de app ook starten met **⇧⌘B** (Shift + Command + B).
 2. Navigeer naar de projectmap `safe-mac-cleaner`
 3. Start de applicatie met:
 
-```
-/usr/bin/python3 smc_gui.py
+```bash
+.venv/bin/python smc_gui.py
 ```
 
-Het gebruik van het absolute Python-pad voorkomt problemen met virtuele omgevingen of verkeerde Python-versies.
+De VS Code-task gebruikt het systeem-Python-pad en vereist daarom dat de dependencies daar beschikbaar zijn. Gebruik de virtuele omgeving voor een reproduceerbare lokale setup.
+
+### Tests en linting
+
+```bash
+.venv/bin/python -m pytest -q
+.venv/bin/ruff check smc_cleaner.py smc_gui.py tests
+```
+
+Deze checks draaien ook automatisch via GitHub Actions bij iedere push en pull request.
 
 ---
 
@@ -94,10 +111,10 @@ Via **Instellingen → Pas Filters Aan…** stel je in wat een relevant bestand 
 
 | Instelling                | Standaard | Betekenis                                            |
 | ------------------------- | --------- | ---------------------------------------------------- |
-| Max. aantal resultaten    | 100       | Beperkt het aantal getoonde bestanden                |
-| Minimale ouderdom (dagen) | 7         | Bestanden jonger dan dit worden genegeerd            |
-| Minimale grootte (MB)     | 1         | Neemt alleen bestanden boven deze grootte mee        |
-| Tijdscriterium            | Last Used | Keuze tussen *Laatst gebruikt* en *Laatst gewijzigd* |
+| Max. aantal resultaten    | 100        | Beperkt het aantal getoonde bestanden                |
+| Minimale ouderdom (dagen) | 30         | Bestanden jonger dan dit worden genegeerd            |
+| Minimale grootte (MB)     | 100        | Neemt alleen bestanden boven deze grootte mee        |
+| Tijdscriterium            | Last Used  | Keuze tussen *Laatst gebruikt* en *Laatst gewijzigd* |
 
 ---
 
@@ -105,6 +122,8 @@ Via **Instellingen → Pas Filters Aan…** stel je in wat een relevant bestand 
 
 * Volledig bestandspad zichtbaar
 * Numerieke kolommen rechts-uitgelijnd voor betere leesbaarheid
+* Verwijderacties controleren of een bestand sinds de scan niet is gewijzigd
+* Mislukte verwijderacties worden afzonderlijk aan de gebruiker gemeld
 
 #### Contextmenu (rechtermuisklik)
 
@@ -135,7 +154,7 @@ De applicatie doet **niet** het volgende:
 
 * ❌ Geen automatische of geplande scans op de achtergrond
 * ❌ Geen permanente verwijdering van bestanden door de app zelf
-* ❌ Geen toegang tot systeemmappen of verborgen OS-paden
+* ❌ Geen toegang tot systeemmappen, de home-directory zelf of paden buiten de home-directory
 * ❌ Geen cloud-sync, upload of externe communicatie
 * ❌ Geen slimme heuristieken of "AI-beslissingen" over wat weg mag
 
@@ -143,8 +162,23 @@ Elke actie vereist expliciete gebruikersinput en bevestiging.
 
 ---
 
-## 🎯 Doel van dit project
+## Doel van dit project
 
 Safe Mac Cleaner is gebouwd als een **persoonlijke utility**: klein, voorspelbaar en veilig.
 
 Het biedt een bewuste en gecontroleerde manier om schijfruimte vrij te maken, zonder de complexiteit, agressieve strategieën of risico’s van commerciële cleaners.
+
+## Projectstructuur
+
+* `smc_cleaner.py`: scan-, safety- en Prullenbaklogica
+* `smc_gui.py`: PySide6-interface en achtergrondworkers
+* `models.py`: gedeelde, gevalideerde applicatiestatus zoals scaninstellingen
+* `workers.py`: achtergrondworkers voor scans en Prullenbakacties
+* `platform_macos.py`: macOS-specifieke Finder- en Prullenbakintegratie
+* `tests/`: tests voor scanvalidatie en veilige verwijdering
+* `Safe Mac Cleaner.spec`: PyInstaller-configuratie voor een macOS-build
+* `.github/workflows/ci.yml`: automatische tests en linting
+
+## Status
+
+De applicatie is bedoeld voor macOS. De engine-tests en statische checks draaien automatisch in CI; een volledige GUI- en PyInstaller-test hoort op macOS te gebeuren.
