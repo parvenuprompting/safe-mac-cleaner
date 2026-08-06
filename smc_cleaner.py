@@ -26,6 +26,10 @@ EXCLUDE_EXTENSIONS = {".app", ".pkg", ".framework", ".DS_Store", ".localized", "
 
 # Mappen die we overslaan tijdens recursie
 EXCLUDE_DIR_NAMES = {'.', '..', 'Library', 'System', 'Applications', 'private', 'Volumes', 'bin', 'sbin', 'usr'}
+EXCLUDE_PACKAGE_DIR_EXTENSIONS = {
+    ".app", ".bundle", ".framework", ".kext", ".photolibrary", ".photoslibrary",
+    ".plugin", ".sparsebundle",
+}
 
 # Persistente uitsluitingen bestand
 EXCLUSION_FILE = Path.home() / ".smc_exclusions.json"
@@ -146,7 +150,8 @@ def _scan_recursive(
     min_size_mb: int, 
     min_age_days: int, 
     age_mode: str,
-    should_stop: Callable[[], bool]
+    should_stop: Callable[[], bool],
+    stats: Dict[str, int],
 ):
     """Interne recursieve functie gebruikmakend van os.scandir voor performance."""
     if should_stop(): 
@@ -162,33 +167,51 @@ def _scan_recursive(
                 if entry.is_dir(follow_symlinks=False):
                     # Check of mapnaam verboden is of begint met .
                     if entry.name.startswith('.') or entry.name in EXCLUDE_DIR_NAMES:
+                        stats["skipped_directories"] += 1
+                        continue
+                    if Path(entry.name).suffix.lower() in EXCLUDE_PACKAGE_DIR_EXTENSIONS:
+                        stats["skipped_packages"] += 1
                         continue
                     # Check volledige pad tegen gebruikers-exclusions
                     if entry.path in exclusions:
                         continue
                     
                     # Recurse (duik dieper)
-                    _scan_recursive(entry.path, candidates, errors, exclusions, min_size_mb, min_age_days, age_mode, should_stop)
+                    _scan_recursive(
+                        entry.path, candidates, errors, exclusions, min_size_mb,
+                        min_age_days, age_mode, should_stop, stats,
+                    )
 
                 # 2. Behandel Bestanden
                 elif entry.is_file(follow_symlinks=False):
                     name = entry.name
-                    if name.startswith('.'): continue
-                    if any(name.endswith(ext) for ext in EXCLUDE_EXTENSIONS): continue
-                    if entry.path in exclusions: continue
+                    if name.startswith('.'):
+                        stats["skipped_hidden"] += 1
+                        continue
+                    if any(name.endswith(ext) for ext in EXCLUDE_EXTENSIONS):
+                        stats["skipped_excluded"] += 1
+                        continue
+                    if entry.path in exclusions:
+                        stats["skipped_excluded"] += 1
+                        continue
 
                     try:
+                        stats["inspected_files"] += 1
                         # Haal cached stat info op (snel!)
                         stat = entry.stat()
                         size_mb = stat.st_size / (1024 * 1024)
                         
-                        if size_mb < min_size_mb: continue
+                        if size_mb < min_size_mb:
+                            stats["skipped_size"] += 1
+                            continue
 
                         # Leeftijd berekenen
                         timestamp = stat.st_atime if age_mode == "last_used" else stat.st_mtime
                         age_days = (time.time() - timestamp) / (60 * 60 * 24)
 
-                        if age_days < min_age_days: continue
+                        if age_days < min_age_days:
+                            stats["skipped_age"] += 1
+                            continue
 
                         candidates.append({
                             "path": entry.path,
@@ -200,6 +223,7 @@ def _scan_recursive(
                             "_st_size": stat.st_size,
                             "_st_mtime_ns": stat.st_mtime_ns,
                         })
+                        stats["candidates"] += 1
 
                     except (OSError, PermissionError):
                         # Skip bestand bij fout
@@ -207,6 +231,7 @@ def _scan_recursive(
 
     except PermissionError:
         errors.append(directory)
+        stats["permission_errors"] += 1
     except Exception:
         logger.exception("Scan fout in %s", directory)
 
@@ -218,12 +243,23 @@ def scan_disk(
     top_n: int,
     progress_callback: Optional[Callable[[str], None]] = None,
     should_stop: Optional[Callable[[], bool]] = None
-) -> Tuple[List[Dict[str, Any]], List[str]]:
+) -> Tuple[List[Dict[str, Any]], List[str], Dict[str, int]]:
     """
     Start de scan. Geeft nu een tuple terug: (resultaten, foutmeldingen).
     """
     candidates = []
     errors = []
+    stats = {
+        "inspected_files": 0,
+        "candidates": 0,
+        "skipped_age": 0,
+        "skipped_size": 0,
+        "skipped_hidden": 0,
+        "skipped_excluded": 0,
+        "skipped_directories": 0,
+        "skipped_packages": 0,
+        "permission_errors": 0,
+    }
     exclusions = {str(Path(path).expanduser().resolve()) for path in load_exclusion_list()}
     
     # Valideer input
@@ -239,7 +275,8 @@ def scan_disk(
         _scan_recursive(
             folder, candidates, errors, exclusions,
             min_size_mb, min_age_days, age_mode, 
-            should_stop or (lambda: False)
+            should_stop or (lambda: False),
+            stats,
         )
 
     # Sorteren
@@ -249,7 +286,7 @@ def scan_disk(
     # Sorteer: Grootste & Oudste eerst
     candidates.sort(key=lambda x: (x["size_mb"], x["age_days"]), reverse=True)
     
-    return candidates[:top_n], errors
+    return candidates[:top_n], errors, stats
 
 def delete_files(files: List[Dict[str, Any]], dry_run: bool = False) -> Dict[str, Any]:
     """Move verified files to the Trash and return separate success/failure results."""
@@ -291,7 +328,7 @@ if __name__ == "__main__":
     print("Start scan op Downloads...")
     
     # Simpele test zonder GUI
-    results, errs = scan_disk(
+    results, errs, stats = scan_disk(
         directories=[str(Path.home() / "Downloads")],
         min_size_mb=10,
         min_age_days=0,
@@ -303,6 +340,7 @@ if __name__ == "__main__":
     print(f"\nResultaten ({len(results)}):")
     for r in results:
         print(f"- {r['size_mb']:.1f}MB | {r['path']}")
+    print(f"\nStatistieken: {stats}")
     
     if errs:
         print(f"\nFouten ({len(errs)} mappen overgeslagen):")

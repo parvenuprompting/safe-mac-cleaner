@@ -42,13 +42,48 @@ def test_scan_disk_filters_files_and_records_metadata(tmp_path, monkeypatch):
     small.write_bytes(b"x")
     monkeypatch.setattr(cleaner, "HOME_PATH", home.resolve())
 
-    results, errors = cleaner.scan_disk([str(folder)], min_size_mb=0, min_age_days=0,
-                                        age_mode="last_modified", top_n=10)
+    results, errors, stats = cleaner.scan_disk([str(folder)], min_size_mb=0, min_age_days=0,
+                                               age_mode="last_modified", top_n=10)
 
     assert errors == []
     paths = {item["path"] for item in results}
     assert str(candidate) in paths
     assert all(key in results[0] for key in ("_st_dev", "_st_ino", "_st_size", "_st_mtime_ns"))
+    assert stats["inspected_files"] == 2
+    assert stats["candidates"] == 2
+
+
+def test_scan_disk_skips_protected_macos_packages(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    folder = home / "Pictures"
+    photos = folder / "Photos Library.photoslibrary"
+    photos.mkdir(parents=True)
+    (photos / "private-media.dat").write_bytes(b"x" * 2048)
+    monkeypatch.setattr(cleaner, "HOME_PATH", home.resolve())
+
+    results, errors, stats = cleaner.scan_disk([str(folder)], min_size_mb=0, min_age_days=0,
+                                               age_mode="last_modified", top_n=10)
+
+    assert results == []
+    assert errors == []
+    assert stats["skipped_packages"] == 1
+    assert stats["inspected_files"] == 0
+
+
+def test_scan_disk_reports_filter_reasons(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    folder = home / "Documents"
+    folder.mkdir(parents=True)
+    (folder / "small.txt").write_bytes(b"x")
+    monkeypatch.setattr(cleaner, "HOME_PATH", home.resolve())
+
+    results, errors, stats = cleaner.scan_disk([str(folder)], min_size_mb=1, min_age_days=0,
+                                               age_mode="last_modified", top_n=10)
+
+    assert results == []
+    assert errors == []
+    assert stats["inspected_files"] == 1
+    assert stats["skipped_size"] == 1
 
 
 def test_delete_files_rejects_changed_file(tmp_path, monkeypatch):

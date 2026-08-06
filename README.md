@@ -9,7 +9,7 @@ Safe Mac Cleaner is een lichte, voorspelbare macOS-app voor veilige schijfopruim
 
 De applicatie is momenteel een persoonlijke utility in actieve v2-ontwikkeling. De nadruk ligt op transparantie, veilige defaults en acties die de gebruiker kan controleren.
 
-De huidige releaseversie is **2.0.0**.
+De huidige releaseversie is **2.1.0**.
 
 Met deze app kun je:
 
@@ -184,6 +184,8 @@ Het biedt een bewuste en gecontroleerde manier om schijfruimte vrij te maken, zo
 
 De resultatenlijst ondersteunt zoeken op bestandsnaam of pad, sorteren per kolom en een detailweergave van het geselecteerde bestand. Via **Uitsluitingen** kunnen eerder uitgesloten bestanden ook weer worden beheerd en verwijderd uit de uitsluitingslijst.
 
+Na iedere scan toont de app hoeveel bestanden zijn onderzocht en hoeveel bestanden door de grootte- of ouderdomsfilters zijn overgeslagen. Beschermde macOS-pakketten, zoals `Photos Library.photoslibrary`, worden bewust niet geopend en veroorzaken geen toegangswaarschuwing.
+
 Er zijn ook scanprofielen beschikbaar:
 
 * **Aangepaste scan**: gebruikt je huidige filters
@@ -202,8 +204,8 @@ De applicatie is bedoeld voor macOS. De engine-tests en statische checks draaien
 Een release wordt gestart door een versie-tag naar GitHub te pushen:
 
 ```bash
-git tag v2.0.0
-git push origin v2.0.0
+git tag v2.1.0
+git push origin v2.1.0
 ```
 
 De releaseworkflow bouwt `Safe Mac Cleaner.app` op macOS 14 en publiceert een zip-bestand aan de GitHub Release. Zonder signing-secrets wordt een unsigned testrelease gemaakt.

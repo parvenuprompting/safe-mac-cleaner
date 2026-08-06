@@ -4,7 +4,7 @@ import smc_cleaner as engine
 
 
 class ScanWorker(QThread):
-    completed = Signal(list, list)
+    completed = Signal(list, list, object)
     cancelled = Signal()
     failed = Signal(str)
 
@@ -16,7 +16,7 @@ class ScanWorker(QThread):
 
     def run(self):
         try:
-            results, errors = engine.scan_disk(
+            results, errors, stats = engine.scan_disk(
                 directories=self.directories,
                 min_size_mb=self.settings["size"],
                 min_age_days=self.settings["age"],
@@ -30,7 +30,7 @@ class ScanWorker(QThread):
             return
 
         if self.is_running:
-            self.completed.emit(results, errors)
+            self.completed.emit(results, errors, stats)
         else:
             self.cancelled.emit()
 

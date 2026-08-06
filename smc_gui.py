@@ -160,6 +160,7 @@ class SafeMacCleanerApp(QMainWindow):
         self.prefs = QSettings("SafeMacCleaner", "Config")
         self.load_settings()
         self.scan_errors = [] 
+        self.scan_stats = {}
         self.scan_history = self.load_history()
 
         self.setup_ui()
@@ -336,7 +337,7 @@ class SafeMacCleanerApp(QMainWindow):
         
         # Footer
         layout.addSpacing(15)
-        footer_lbl = QLabel("© 2025 Safe Mac Cleaner door T. Welles")
+        footer_lbl = QLabel("© 2026 Tiëndo Welles")
         footer_lbl.setAlignment(Qt.AlignCenter)
         footer_lbl.setStyleSheet("color: #666666; font-size: 11px;")
         layout.addWidget(footer_lbl)
@@ -349,6 +350,7 @@ class SafeMacCleanerApp(QMainWindow):
         self.table.setRowCount(0)
         self.ranked_results = []
         self.scan_errors = []
+        self.scan_stats = {}
         self.warn_btn.hide() 
 
         self.btn_scan.setEnabled(False)
@@ -365,8 +367,12 @@ class SafeMacCleanerApp(QMainWindow):
         self.worker.completed.connect(self.on_scan_finished)
         self.worker.cancelled.connect(self.on_scan_cancelled)
         self.worker.failed.connect(self.on_scan_failed)
-        self.worker.finished.connect(self.worker.deleteLater)
+        self.worker.finished.connect(self.clear_scan_worker)
         self.worker.start()
+
+    def clear_scan_worker(self):
+        if self.sender() is self.worker:
+            self.worker = None
 
     def stop_scan(self):
         if self.worker:
@@ -387,13 +393,14 @@ class SafeMacCleanerApp(QMainWindow):
         self.status_lbl.setText("❌ Scan mislukt.")
         QMessageBox.critical(self, "Scan mislukt", message)
 
-    def on_scan_finished(self, results, errors):
+    def on_scan_finished(self, results, errors, stats):
         self.btn_scan.setEnabled(True)
         self.btn_stop.setEnabled(False)
         self.progress_bar.hide()
         
         self.ranked_results = results
         self.scan_errors = errors
+        self.scan_stats = stats
         self.scan_history.insert(0, {
             "timestamp": datetime.now().astimezone().isoformat(timespec="minutes"),
             "count": len(results),
@@ -411,7 +418,16 @@ class SafeMacCleanerApp(QMainWindow):
         
         self.btn_select_all.setEnabled(len(results) > 0)
         total_mb = sum(r['size_mb'] for r in results)
-        self.status_lbl.setText(f"✅ Klaar. {len(results)} bestanden gevonden ({total_mb:.1f} MB totaal).")
+        inspected = stats.get("inspected_files", 0)
+        skipped = stats.get("skipped_age", 0) + stats.get("skipped_size", 0)
+        if results:
+            status = f"✅ Klaar. {len(results)} bestanden gevonden ({total_mb:.1f} MB totaal)."
+        else:
+            status = (
+                f"Geen geschikte bestanden gevonden. {inspected} bestanden onderzocht, "
+                f"{skipped} door filters overgeslagen."
+            )
+        self.status_lbl.setText(status)
 
     def apply_profile(self, profile):
         if not hasattr(self, "settings") or not profile:
