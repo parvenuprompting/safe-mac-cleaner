@@ -1,5 +1,12 @@
 from dataclasses import dataclass
 
+SCAN_PROFILES = {
+    "Aangepaste scan": {},
+    "Grote bestanden": {"size": 1000, "age": 0},
+    "Oude bestanden": {"size": 100, "age": 180},
+    "Oude downloads": {"size": 100, "age": 30},
+}
+
 
 @dataclass(frozen=True)
 class ScanSettings:
@@ -23,3 +30,8 @@ class ScanSettings:
 
     def as_dict(self):
         return {"top_n": self.top_n, "age": self.age, "size": self.size, "mode": self.mode}
+
+    def with_profile(self, profile):
+        values = self.as_dict()
+        values.update(SCAN_PROFILES.get(profile, {}))
+        return ScanSettings.from_values(**values)

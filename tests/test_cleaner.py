@@ -106,6 +106,19 @@ def test_scan_settings_normalizes_persisted_values():
     }
 
 
+def test_scan_profile_overrides_only_profile_filters():
+    settings = ScanSettings.from_values(50, 10, 25, "last_modified")
+
+    profile = settings.with_profile("Oude bestanden")
+
+    assert profile.as_dict() == {
+        "top_n": 50,
+        "age": 180,
+        "size": 100,
+        "mode": "last_modified",
+    }
+
+
 def test_empty_trash_adapter_returns_command_error(monkeypatch):
     class FailedCommand:
         returncode = 1

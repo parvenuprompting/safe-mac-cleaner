@@ -1,5 +1,7 @@
+import json
 import os
 import sys
+from datetime import datetime
 
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QAction, QIcon, QPixmap
@@ -13,6 +15,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
     QListWidget,
     QMainWindow,
     QMenu,
@@ -30,7 +33,7 @@ import platform_macos
 
 # Importeer de engine
 import smc_cleaner as engine
-from models import ScanSettings
+from models import SCAN_PROFILES, ScanSettings
 from workers import DeleteWorker, ScanWorker
 
 # =======================================================
@@ -157,6 +160,7 @@ class SafeMacCleanerApp(QMainWindow):
         self.prefs = QSettings("SafeMacCleaner", "Config")
         self.load_settings()
         self.scan_errors = [] 
+        self.scan_history = self.load_history()
 
         self.setup_ui()
         self.worker = None
@@ -179,6 +183,17 @@ class SafeMacCleanerApp(QMainWindow):
         self.prefs.setValue("age", self.settings['age'])
         self.prefs.setValue("size", self.settings['size'])
         self.prefs.setValue("mode", self.settings['mode'])
+
+    def load_history(self):
+        raw_history = self.prefs.value("scan_history", "[]")
+        try:
+            history = json.loads(raw_history) if isinstance(raw_history, str) else raw_history
+            return history if isinstance(history, list) else []
+        except (TypeError, ValueError):
+            return []
+
+    def save_history(self):
+        self.prefs.setValue("scan_history", json.dumps(self.scan_history[:20]))
 
     def setup_ui(self):
         central = QWidget()
@@ -243,9 +258,11 @@ class SafeMacCleanerApp(QMainWindow):
         self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setShowGrid(False) 
-        self.table.setFocusPolicy(Qt.NoFocus) 
+        self.table.setFocusPolicy(Qt.NoFocus)
+        self.table.setSortingEnabled(True)
         
         self.table.itemChanged.connect(self.on_item_checked)
+        self.table.itemSelectionChanged.connect(self.update_details)
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self.show_context_menu)
         layout.addWidget(self.table)
@@ -267,6 +284,14 @@ class SafeMacCleanerApp(QMainWindow):
         self.btn_settings = QPushButton("⚙️ Instellingen")
         self.btn_settings.clicked.connect(self.open_settings)
         btn_layout.addWidget(self.btn_settings)
+
+        self.btn_exclusions = QPushButton("🚫 Uitsluitingen")
+        self.btn_exclusions.clicked.connect(self.manage_exclusions)
+        btn_layout.addWidget(self.btn_exclusions)
+
+        self.btn_history = QPushButton("🕘 Historie")
+        self.btn_history.clicked.connect(self.show_history)
+        btn_layout.addWidget(self.btn_history)
 
         self.btn_select_all = QPushButton("✅ Selecteer Alles")
         self.btn_select_all.clicked.connect(self.toggle_select_all)
@@ -290,6 +315,24 @@ class SafeMacCleanerApp(QMainWindow):
         btn_layout.addWidget(self.btn_empty)
 
         layout.addLayout(btn_layout)
+
+        search_layout = QHBoxLayout()
+        search_layout.addWidget(QLabel("Profiel:"))
+        self.profile_combo = QComboBox()
+        self.profile_combo.addItems(SCAN_PROFILES.keys())
+        self.profile_combo.currentTextChanged.connect(self.apply_profile)
+        search_layout.addWidget(self.profile_combo)
+        search_layout.addWidget(QLabel("Zoeken:"))
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Filter op bestandsnaam of pad...")
+        self.search_input.textChanged.connect(self.filter_results)
+        search_layout.addWidget(self.search_input)
+        layout.insertLayout(layout.count() - 1, search_layout)
+
+        self.detail_lbl = QLabel("Selecteer een resultaat voor details.")
+        self.detail_lbl.setWordWrap(True)
+        self.detail_lbl.setStyleSheet("color: #999; font-size: 12px; padding: 5px 0;")
+        layout.insertWidget(layout.count() - 1, self.detail_lbl)
         
         # Footer
         layout.addSpacing(15)
@@ -351,6 +394,14 @@ class SafeMacCleanerApp(QMainWindow):
         
         self.ranked_results = results
         self.scan_errors = errors
+        self.scan_history.insert(0, {
+            "timestamp": datetime.now().astimezone().isoformat(timespec="minutes"),
+            "count": len(results),
+            "size_mb": round(sum(item["size_mb"] for item in results), 1),
+            "errors": len(errors),
+        })
+        self.scan_history = self.scan_history[:20]
+        self.save_history()
         
         if errors:
             self.warn_btn.setText(f"⚠️ {len(errors)} mappen overgeslagen")
@@ -362,6 +413,35 @@ class SafeMacCleanerApp(QMainWindow):
         total_mb = sum(r['size_mb'] for r in results)
         self.status_lbl.setText(f"✅ Klaar. {len(results)} bestanden gevonden ({total_mb:.1f} MB totaal).")
 
+    def apply_profile(self, profile):
+        if not hasattr(self, "settings") or not profile:
+            return
+        self.settings = ScanSettings.from_values(**self.settings).with_profile(profile).as_dict()
+        self.save_settings()
+        self.start_scan()
+
+    def show_history(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Scanhistorie")
+        dialog.resize(550, 350)
+        dialog_layout = QVBoxLayout(dialog)
+        history_list = QListWidget()
+        if self.scan_history:
+            for entry in self.scan_history:
+                warning = f", {entry['errors']} waarschuwingen" if entry.get("errors") else ""
+                history_list.addItem(
+                    f"{entry.get('timestamp', 'Onbekend')}: "
+                    f"{entry.get('count', 0)} bestanden, {entry.get('size_mb', 0):.1f} MB{warning}"
+                )
+        else:
+            history_list.addItem("Nog geen scans uitgevoerd.")
+        history_list.setSelectionMode(QListWidget.NoSelection)
+        dialog_layout.addWidget(history_list)
+        close_button = QPushButton("Sluiten")
+        close_button.clicked.connect(dialog.accept)
+        dialog_layout.addWidget(close_button)
+        dialog.exec()
+
     def show_errors(self):
         if not self.scan_errors: return
         msg = "De volgende mappen konden niet worden gescand (geen toegang):\n\n"
@@ -370,6 +450,7 @@ class SafeMacCleanerApp(QMainWindow):
         QMessageBox.warning(self, "Scan Waarschuwing", msg)
 
     def populate_table(self):
+        self.table.setSortingEnabled(False)
         self.table.setRowCount(len(self.ranked_results))
         self.table.blockSignals(True)
         
@@ -377,6 +458,7 @@ class SafeMacCleanerApp(QMainWindow):
             chk = QTableWidgetItem()
             chk.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
             chk.setCheckState(Qt.Unchecked)
+            chk.setData(Qt.UserRole, item["path"])
             self.table.setItem(i, 0, chk)
             
             self.table.setItem(i, 1, QTableWidgetItem(str(i+1)))
@@ -386,6 +468,30 @@ class SafeMacCleanerApp(QMainWindow):
             self.table.setItem(i, 5, QTableWidgetItem(item['path']))
             
         self.table.blockSignals(False)
+        self.table.setSortingEnabled(True)
+        self.filter_results(self.search_input.text())
+
+    def result_for_row(self, row):
+        path = self.table.item(row, 5).text()
+        return next((item for item in self.ranked_results if item["path"] == path), None)
+
+    def filter_results(self, query):
+        query = query.casefold().strip()
+        for row in range(self.table.rowCount()):
+            path = self.table.item(row, 5).text().casefold()
+            self.table.setRowHidden(row, bool(query and query not in path))
+
+    def update_details(self):
+        selected = self.table.selectedItems()
+        if not selected:
+            self.detail_lbl.setText("Selecteer een resultaat voor details.")
+            return
+        item = self.result_for_row(selected[0].row())
+        if item:
+            self.detail_lbl.setText(
+                f"<b>{item['path']}</b> | {item['size_mb']:.1f} MB | "
+                f"{int(item['age_days'])} dagen oud | Type: {item['file_type']}"
+            )
 
     def on_item_checked(self):
         count = 0
@@ -393,7 +499,9 @@ class SafeMacCleanerApp(QMainWindow):
         for i in range(self.table.rowCount()):
             if self.table.item(i, 0).checkState() == Qt.Checked:
                 count += 1
-                size += self.ranked_results[i]['size_mb']
+                item = self.result_for_row(i)
+                if item:
+                    size += item['size_mb']
         
         if count > 0:
             self.btn_trash.setText(f"🗑️ Verwijder {count} items ({size:.1f} MB)")
@@ -417,15 +525,28 @@ class SafeMacCleanerApp(QMainWindow):
     def preview_file(self):
         for i in range(self.table.rowCount()):
             if self.table.item(i, 0).checkState() == Qt.Checked:
-                path = self.ranked_results[i]['path']
+                item = self.result_for_row(i)
+                if not item:
+                    continue
+                path = item['path']
                 platform_macos.reveal_in_finder(path)
                 return
 
     def delete_selected(self):
         indexes = [i for i in range(self.table.rowCount()) if self.table.item(i, 0).checkState() == Qt.Checked]
         if not indexes: return
-        items_to_del = [self.ranked_results[i] for i in indexes]
-        confirm = QMessageBox.question(self, "Bevestigen", f"Verplaats {len(items_to_del)} bestanden naar Prullenbak?", QMessageBox.Yes | QMessageBox.No)
+        items_to_del = [self.result_for_row(i) for i in indexes]
+        items_to_del = [item for item in items_to_del if item]
+        total_mb = sum(item['size_mb'] for item in items_to_del)
+        preview = "\n".join(f"- {item['path']}" for item in items_to_del[:5])
+        if len(items_to_del) > 5:
+            preview += f"\n- ... en nog {len(items_to_del) - 5} bestanden"
+        confirm = QMessageBox.question(
+            self,
+            "Verwijderen bevestigen",
+            f"Verplaats {len(items_to_del)} bestanden ({total_mb:.1f} MB) naar de Prullenbak?\n\n{preview}",
+            QMessageBox.Yes | QMessageBox.No,
+        )
         if confirm == QMessageBox.Yes:
             self.del_worker = DeleteWorker(items_to_del)
             self.del_worker.completed.connect(self.on_delete_finished)
@@ -473,7 +594,10 @@ class SafeMacCleanerApp(QMainWindow):
         idx = self.table.indexAt(pos)
         if not idx.isValid(): return
         row = idx.row()
-        path = self.ranked_results[row]['path']
+        item = self.result_for_row(row)
+        if not item:
+            return
+        path = item['path']
         menu = QMenu()
         act_open = QAction("🔍 Toon in Finder", self)
         act_open.triggered.connect(lambda: platform_macos.reveal_in_finder(path))
@@ -485,6 +609,27 @@ class SafeMacCleanerApp(QMainWindow):
 
     def exclude_file(self, path):
         engine.toggle_exclusion(path, True)
+        self.start_scan()
+
+    def manage_exclusions(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Uitsluitingen beheren")
+        dialog.resize(650, 400)
+        dialog_layout = QVBoxLayout(dialog)
+        exclusion_list = QListWidget()
+        exclusion_list.addItems(engine.load_exclusion_list())
+        dialog_layout.addWidget(exclusion_list)
+
+        remove_button = QPushButton("Verwijder geselecteerde uitsluiting")
+        dialog_layout.addWidget(remove_button)
+
+        def remove_selected():
+            for item in exclusion_list.selectedItems():
+                engine.toggle_exclusion(item.text(), False)
+                exclusion_list.takeItem(exclusion_list.row(item))
+
+        remove_button.clicked.connect(remove_selected)
+        dialog.exec()
         self.start_scan()
 
     def open_settings(self):

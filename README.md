@@ -179,6 +179,17 @@ Het biedt een bewuste en gecontroleerde manier om schijfruimte vrij te maken, zo
 * `Safe Mac Cleaner.spec`: PyInstaller-configuratie voor een macOS-build
 * `.github/workflows/ci.yml`: automatische tests en linting
 
+De resultatenlijst ondersteunt zoeken op bestandsnaam of pad, sorteren per kolom en een detailweergave van het geselecteerde bestand. Via **Uitsluitingen** kunnen eerder uitgesloten bestanden ook weer worden beheerd en verwijderd uit de uitsluitingslijst.
+
+Er zijn ook scanprofielen beschikbaar:
+
+* **Aangepaste scan**: gebruikt je huidige filters
+* **Grote bestanden**: bestanden vanaf 1.000 MB
+* **Oude bestanden**: bestanden ouder dan 180 dagen en vanaf 100 MB
+* **Oude downloads**: bestanden ouder dan 30 dagen en vanaf 100 MB
+
+De lokale scanhistorie bewaart maximaal 20 samenvattingen met datum, aantal resultaten, totale grootte en eventuele scanwaarschuwingen. Er wordt geen bestandsinhoud of data naar buiten de computer gestuurd.
+
 ## Status
 
 De applicatie is bedoeld voor macOS. De engine-tests en statische checks draaien automatisch in CI; een volledige GUI- en PyInstaller-test hoort op macOS te gebeuren.
