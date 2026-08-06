@@ -47,5 +47,12 @@ app = BUNDLE(
     coll,
     name='Safe Mac Cleaner.app',
     icon='icon.icns',
-    bundle_identifier=None,
+    bundle_identifier='com.parvenuprompting.safemaccleaner',
+    info_plist={
+        'CFBundleDisplayName': 'Safe Mac Cleaner',
+        'CFBundleShortVersionString': '2.0.0',
+        'CFBundleVersion': '2.0.0',
+        'LSMinimumSystemVersion': '13.0',
+        'NSHighResolutionCapable': True,
+    },
 )

@@ -9,6 +9,8 @@ Safe Mac Cleaner is een lichte, voorspelbare macOS-app voor veilige schijfopruim
 
 De applicatie is momenteel een persoonlijke utility in actieve v2-ontwikkeling. De nadruk ligt op transparantie, veilige defaults en acties die de gebruiker kan controleren.
 
+De huidige releaseversie is **2.0.0**.
+
 Met deze app kun je:
 
 * In één oogopslag zien hoeveel schijfruimte vrij is (GB en %)
@@ -178,6 +180,7 @@ Het biedt een bewuste en gecontroleerde manier om schijfruimte vrij te maken, zo
 * `tests/`: tests voor scanvalidatie en veilige verwijdering
 * `Safe Mac Cleaner.spec`: PyInstaller-configuratie voor een macOS-build
 * `.github/workflows/ci.yml`: automatische tests en linting
+* `.github/workflows/release.yml`: getagde macOS-builds en GitHub Releases
 
 De resultatenlijst ondersteunt zoeken op bestandsnaam of pad, sorteren per kolom en een detailweergave van het geselecteerde bestand. Via **Uitsluitingen** kunnen eerder uitgesloten bestanden ook weer worden beheerd en verwijderd uit de uitsluitingslijst.
 
@@ -193,3 +196,26 @@ De lokale scanhistorie bewaart maximaal 20 samenvattingen met datum, aantal resu
 ## Status
 
 De applicatie is bedoeld voor macOS. De engine-tests en statische checks draaien automatisch in CI; een volledige GUI- en PyInstaller-test hoort op macOS te gebeuren.
+
+## Releases
+
+Een release wordt gestart door een versie-tag naar GitHub te pushen:
+
+```bash
+git tag v2.0.0
+git push origin v2.0.0
+```
+
+De releaseworkflow bouwt `Safe Mac Cleaner.app` op macOS 14 en publiceert een zip-bestand aan de GitHub Release. Zonder signing-secrets wordt een unsigned testrelease gemaakt.
+
+Voor een distributieklare release configureer je deze GitHub Actions-secrets:
+
+* `MACOS_CERTIFICATE_BASE64`
+* `MACOS_CERTIFICATE_PASSWORD`
+* `MACOS_KEYCHAIN_PASSWORD`
+* `MACOS_SIGNING_IDENTITY`
+* `APPLE_ID`
+* `APPLE_TEAM_ID`
+* `APPLE_APP_PASSWORD`
+
+De signing workflow gebruikt hardened runtime en notariseert de app wanneer alle Apple-credentials beschikbaar zijn. Versienummers moeten bij een nieuwe release worden bijgewerkt in `pyproject.toml` en `Safe Mac Cleaner.spec`.
