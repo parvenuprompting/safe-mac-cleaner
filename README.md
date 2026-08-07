@@ -238,4 +238,4 @@ npm run test
 npm run test:e2e
 ```
 
-De eerste v3-alpha bevat de nieuwe interface, scanprofielen, Tauri command-skeleton, lokale clipboard/store plugins en testbasis. De Rust scanengine wordt daarna afzonderlijk gemigreerd en gevalideerd voordat v3 productiefunctionaliteit krijgt.
+De eerste v3-alpha bevat de nieuwe interface, scanprofielen, Tauri commands, lokale clipboard/store plugins en testbasis. De eerste Rust scanengine is nu beschikbaar via `scan_files`; de React-resultatentabel wordt in de volgende stap daarop aangesloten.

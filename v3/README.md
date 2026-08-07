@@ -29,4 +29,4 @@ npm run test
 npm run test:e2e
 ```
 
-The first v3 milestone contains the frontend shell, Tauri 2 commands, local clipboard/store plugins and test foundations. The Rust scanner and safety engine are intentionally not connected yet.
+The first v3 milestone contains the frontend shell, Tauri 2 commands, local clipboard/store plugins and test foundations. The Rust scanner is now available through the `scan_files` command; the React results table will be connected in the next step.
