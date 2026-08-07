@@ -58,7 +58,7 @@ async fn scan_files(
     cancelled.store(false, Ordering::Relaxed);
     let scan_cancelled = cancelled.clone();
     tokio::task::spawn_blocking(move || {
-        scanner::scan_directories_with_hooks(
+        let response = scanner::scan_directories_with_hooks(
             &directories,
             &home,
             min_size_mb,
@@ -66,16 +66,17 @@ async fn scan_files(
             &age_mode,
             top_n,
             || scan_cancelled.load(Ordering::Relaxed),
-            |path, inspected_files| {
-                let _ = app.emit(
-                    "scan-progress",
-                    ScanProgress {
-                        path: path.to_string_lossy().to_string(),
-                        inspected_files,
-                    },
-                );
+            |inspected_files| {
+                let _ = app.emit("scan-progress", ScanProgress { inspected_files });
             },
-        )
+        );
+        let _ = app.emit(
+            "scan-progress",
+            ScanProgress {
+                inspected_files: response.stats.inspected_files,
+            },
+        );
+        response
     })
     .await
     .unwrap_or_else(|error| scanner::ScanResponse {
@@ -87,7 +88,6 @@ async fn scan_files(
 
 #[derive(Clone, Serialize)]
 struct ScanProgress {
-    path: String,
     inspected_files: u64,
 }
 

@@ -105,4 +105,69 @@ mod tests {
         assert!(error.contains("gewijzigd"));
         fs::remove_dir_all(root).unwrap();
     }
+
+    #[test]
+    fn rejects_directory_before_trash() {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("safe-delete-directory-{suffix}"));
+        fs::create_dir_all(root.join("folder")).unwrap();
+        let item = DeleteItem {
+            path: root.join("folder").to_string_lossy().to_string(),
+            size_bytes: 0,
+            modified_unix: 0,
+        };
+
+        let error = validate_item(&item, &root).unwrap_err();
+        assert!(error.contains("geen regulier bestand"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn rejects_home_directory_before_trash() {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("safe-delete-home-{suffix}"));
+        fs::create_dir_all(&root).unwrap();
+        let item = DeleteItem {
+            path: root.to_string_lossy().to_string(),
+            size_bytes: 0,
+            modified_unix: 0,
+        };
+
+        let error = validate_item(&item, &root).unwrap_err();
+        assert!(error.contains("buiten de veilige home-directory"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_symlink_target_outside_home() {
+        use std::os::unix::fs::symlink;
+
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("safe-delete-symlink-{suffix}"));
+        let outside = std::env::temp_dir().join(format!("safe-delete-target-{suffix}"));
+        fs::create_dir_all(&root).unwrap();
+        fs::write(&outside, b"outside").unwrap();
+        let link = root.join("link.txt");
+        symlink(&outside, &link).unwrap();
+        let item = DeleteItem {
+            path: link.to_string_lossy().to_string(),
+            size_bytes: 7,
+            modified_unix: 0,
+        };
+
+        let error = validate_item(&item, &root).unwrap_err();
+        assert!(error.contains("buiten de veilige home-directory"));
+        fs::remove_dir_all(root).unwrap();
+        fs::remove_file(outside).unwrap();
+    }
 }

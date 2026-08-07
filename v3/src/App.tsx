@@ -22,24 +22,27 @@ export function App() {
   const [profile, setProfile] = useState<ScanProfile>("custom");
   const [filters, setFilters] = useState<CustomFilters>({ ...profileFilters.custom, topN: 100 });
   const [scanning, setScanning] = useState(false);
+  const [inspectedFiles, setInspectedFiles] = useState(0);
   const [status, setStatus] = useState("Klaar voor een veilige scan.");
   const [results, setResults] = useState<ScanItem[]>([]);
   const [scanResponse, setScanResponse] = useState<ScanResponse | null>(null);
   const [query, setQuery] = useState("");
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
-  const [appInfo, setAppInfo] = useState<AppInfo>({ name: "Safe Mac Cleaner", version: "3.0.0-alpha.2" });
+  const [appInfo, setAppInfo] = useState<AppInfo>({ name: "Safe Mac Cleaner", version: "3.0.0-alpha.3" });
 
   useEffect(() => {
     getAppInfo().then(setAppInfo).catch(() => undefined);
-    const unlisten = listenToScanProgress(({ path, inspected_files }) => {
-      setStatus(`Onderzocht: ${inspected_files} bestanden · ${path}`);
+    const unlisten = listenToScanProgress(({ inspected_files }) => {
+      setInspectedFiles(inspected_files);
+      setStatus(`Scan bezig · ${inspected_files.toLocaleString("nl-NL")} bestanden onderzocht`);
     });
     return () => { void unlisten.then((cleanup) => cleanup()); };
   }, []);
 
   async function startScan() {
     setScanning(true);
+    setInspectedFiles(0);
     setStatus("Lokale mappen worden onderzocht...");
     try {
       const response = await scanFiles(filters);
@@ -142,6 +145,12 @@ export function App() {
             </button>
             {scanning && <button className="secondary-button" onClick={stopScan}>Stop scan</button>}
           </div>
+          {scanning && (
+            <div className="scan-progress" aria-live="polite" aria-label="Scanvoortgang">
+              <div className="progress-track"><div className="progress-indicator" /></div>
+              <span>{inspectedFiles.toLocaleString("nl-NL")} bestanden onderzocht</span>
+            </div>
+          )}
         </div>
       </section>
 

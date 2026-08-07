@@ -28,11 +28,11 @@ export type ScanResponse = {
   };
 };
 
-export type ScanProgress = { path: string; inspected_files: number };
+export type ScanProgress = { inspected_files: number };
 
 export async function getAppInfo(): Promise<{ name: string; version: string }> {
   if (!isTauri) {
-    return { name: "Safe Mac Cleaner", version: "3.0.0-alpha.2" };
+    return { name: "Safe Mac Cleaner", version: "3.0.0-alpha.3" };
   }
   return invoke("get_app_info");
 }

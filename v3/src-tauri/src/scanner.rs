@@ -35,6 +35,7 @@ const EXCLUDED_FILE_EXTENSIONS: &[&str] = &[
     ".plugin",
     ".kext",
 ];
+const PROGRESS_BATCH_SIZE: u64 = 500;
 
 #[derive(Debug, Serialize)]
 pub struct ScanItem {
@@ -84,7 +85,7 @@ pub fn scan_directories(
         age_mode,
         top_n,
         || false,
-        |_, _| {},
+        |_| {},
     )
 }
 
@@ -100,7 +101,7 @@ pub fn scan_directories_with_hooks<C, P>(
 ) -> ScanResponse
 where
     C: Fn() -> bool + Copy,
-    P: Fn(&Path, u64) + Copy,
+    P: Fn(u64) + Copy,
 {
     let home = match home.canonicalize() {
         Ok(path) => path,
@@ -196,7 +197,7 @@ fn scan_directory<C, P>(
     on_progress: P,
 ) where
     C: Fn() -> bool + Copy,
-    P: Fn(&Path, u64) + Copy,
+    P: Fn(u64) + Copy,
 {
     let entries = match fs::read_dir(directory) {
         Ok(entries) => entries,
@@ -271,7 +272,9 @@ fn scan_directory<C, P>(
             continue;
         }
         stats.inspected_files += 1;
-        on_progress(&path, stats.inspected_files);
+        if stats.inspected_files % PROGRESS_BATCH_SIZE == 0 {
+            on_progress(stats.inspected_files);
+        }
 
         let metadata = match entry.metadata() {
             Ok(metadata) => metadata,

@@ -1,7 +1,7 @@
 # Safe Mac Cleaner
 
 [![CI](https://github.com/parvenuprompting/safe-mac-cleaner/actions/workflows/ci.yml/badge.svg)](https://github.com/parvenuprompting/safe-mac-cleaner/actions/workflows/ci.yml)
-[![v3 alpha](https://img.shields.io/badge/v3-3.0.0--alpha.2-orange)](https://github.com/parvenuprompting/safe-mac-cleaner/releases/tag/v3.0.0-alpha.2)
+[![v3 alpha](https://img.shields.io/badge/v3-3.0.0--alpha.3-orange)](https://github.com/parvenuprompting/safe-mac-cleaner/releases/tag/v3.0.0-alpha.3)
 [![Latest v2 release](https://img.shields.io/github/v/release/parvenuprompting/safe-mac-cleaner?filter=v2.*&label=v2%20stable&color=2ea44f)](https://github.com/parvenuprompting/safe-mac-cleaner/releases)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=111111)](v3/README.md)
 [![Tauri](https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=111111)](v3/README.md)
@@ -14,7 +14,7 @@ Geen cloud, geen verborgen verwijderacties en geen AI-runtime. De gebruiker bepa
 
 ## V3 Status
 
-De huidige v3-alpha is `3.0.0-alpha.2` en ondersteunt:
+De huidige v3-alpha is `3.0.0-alpha.3` en ondersteunt:
 
 - Scannen van veilige gebruikersmappen op macOS Apple Silicon
 - Grootte-, ouderdoms- en limietfilters
@@ -101,15 +101,15 @@ Belangrijke Tauri commands:
 Een v3-alpha wordt gepubliceerd met een `v3.*`-tag:
 
 ```bash
-git tag v3.0.0-alpha.2
-git push origin v3.0.0-alpha.2
+git tag v3.0.0-alpha.3
+git push origin v3.0.0-alpha.3
 ```
 
 De workflow `.github/workflows/release-v3.yml` bouwt een Apple Silicon `Safe Mac Cleaner v3.app`, verpakt de app als zip en publiceert een GitHub prerelease.
 
 De laatste v3-release staat op:
 
-https://github.com/parvenuprompting/safe-mac-cleaner/releases/tag/v3.0.0-alpha.2
+https://github.com/parvenuprompting/safe-mac-cleaner/releases/tag/v3.0.0-alpha.3
 
 Signing en notarization zijn nog niet geconfigureerd voor de alpha-builds.
 
