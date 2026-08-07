@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { getAppInfo } from "./lib/tauri";
-import { scanProfiles, type ScanProfile } from "./features/scan/scanProfiles";
+import { getAppInfo, scanFiles, type ScanItem, type ScanResponse } from "./lib/tauri";
+import { profileFilters, scanProfiles, type ScanProfile } from "./features/scan/scanProfiles";
 
 type AppInfo = { name: string; version: string };
 
@@ -8,20 +8,41 @@ export function App() {
   const [profile, setProfile] = useState<ScanProfile>("custom");
   const [scanning, setScanning] = useState(false);
   const [status, setStatus] = useState("Klaar voor een veilige scan.");
+  const [results, setResults] = useState<ScanItem[]>([]);
+  const [scanResponse, setScanResponse] = useState<ScanResponse | null>(null);
+  const [query, setQuery] = useState("");
   const [appInfo, setAppInfo] = useState<AppInfo>({ name: "Safe Mac Cleaner", version: "3.0.0-alpha.1" });
 
   useEffect(() => {
     getAppInfo().then(setAppInfo).catch(() => undefined);
   }, []);
 
-  function startScan() {
+  async function startScan() {
     setScanning(true);
-    setStatus("Scan voorbereiden...");
-    window.setTimeout(() => {
+    setStatus("Lokale mappen worden onderzocht...");
+    try {
+      const response = await scanFiles(profileFilters[profile]);
+      setScanResponse(response);
+      setResults(response.results);
+      if (response.results.length > 0) {
+        setStatus(`${response.results.length} geschikte bestanden gevonden.`);
+      } else {
+        setStatus(`Geen bestanden gevonden. ${response.stats.inspected_files} bestanden onderzocht.`);
+      }
+    } catch (error) {
+      setStatus("Scan mislukt.");
+      setScanResponse({
+        results: [],
+        errors: [error instanceof Error ? error.message : "Onbekende scanfout"],
+        stats: { inspected_files: 0, candidates: 0, skipped_age: 0, skipped_size: 0, skipped_packages: 0, permission_errors: 0 },
+      });
+      setResults([]);
+    } finally {
       setScanning(false);
-      setStatus("V3-preview: de Rust scanengine wordt in de volgende stap aangesloten.");
-    }, 450);
+    }
   }
+
+  const visibleResults = results.filter((item) => item.path.toLowerCase().includes(query.toLowerCase()));
 
   return (
     <main className="app-shell">
@@ -64,10 +85,25 @@ export function App() {
             </div>
             <span className="count-badge">0</span>
           </div>
-          <div className="empty-state">
-            <div className="empty-mark">⌁</div>
-            <p>Je scanresultaten verschijnen hier.</p>
-            <span>De v3-interface is klaar voor de nieuwe Rust safety-engine.</span>
+          {visibleResults.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-mark">⌁</div>
+              <p>{results.length ? "Geen resultaten voor deze zoekopdracht." : "Je scanresultaten verschijnen hier."}</p>
+              <span>{scanResponse?.errors[0] ?? "Start een scan om lokale resultaten te bekijken."}</span>
+            </div>
+          ) : (
+            <div className="result-list">
+              {visibleResults.map((item) => (
+                <div className="result-row" key={item.path}>
+                  <div><strong>{item.path.split("/").pop()}</strong><span>{item.path}</span></div>
+                  <b>{item.size_mb.toFixed(1)} MB</b>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="result-footer">
+            <input aria-label="Zoek in resultaten" placeholder="Zoek in resultaten..." value={query} onChange={(event) => setQuery(event.target.value)} />
+            <span>{scanResponse ? `${scanResponse.stats.inspected_files} onderzocht · ${scanResponse.stats.skipped_packages} pakketten overgeslagen` : ""}</span>
           </div>
         </article>
         <aside className="panel safety-panel">

@@ -6,3 +6,10 @@ export const scanProfiles: Record<ScanProfile, { label: string; description: str
   old: { label: "Oude bestanden", description: "Ouder dan 180 dagen" },
   downloads: { label: "Oude downloads", description: "Downloads ouder dan 30 dagen" },
 };
+
+export const profileFilters: Record<ScanProfile, { minSizeMb: number; minAgeDays: number }> = {
+  custom: { minSizeMb: 100, minAgeDays: 30 },
+  large: { minSizeMb: 1000, minAgeDays: 0 },
+  old: { minSizeMb: 100, minAgeDays: 180 },
+  downloads: { minSizeMb: 100, minAgeDays: 30 },
+};

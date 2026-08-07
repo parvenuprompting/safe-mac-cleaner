@@ -25,6 +25,21 @@ fn scan_files(
     top_n: usize,
 ) -> scanner::ScanResponse {
     let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/"));
+    let directories = if directories.is_empty() {
+        [
+            "Downloads",
+            "Desktop",
+            "Documents",
+            "Movies",
+            "Pictures",
+            "Music",
+        ]
+        .iter()
+        .map(|directory| home.join(directory).to_string_lossy().to_string())
+        .collect()
+    } else {
+        directories
+    };
     scanner::scan_directories(
         &directories,
         &home,

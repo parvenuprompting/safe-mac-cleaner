@@ -37,6 +37,15 @@ select { width: 100%; border: 1px solid #506456; border-radius: 10px; padding: 1
 .empty-state { display: grid; min-height: 180px; place-content: center; justify-items: center; color: #aab1ad; text-align: center; }
 .empty-state p { margin-bottom: 5px; font-weight: 700; }
 .empty-state span { color: #68736d; font-size: 13px; }
+.result-list { display: grid; max-height: 250px; margin-top: 24px; overflow: auto; }
+.result-row { display: flex; justify-content: space-between; gap: 16px; border-top: 1px solid #2b332e; padding: 13px 0; }
+.result-row div { min-width: 0; }
+.result-row strong, .result-row span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.result-row strong { color: #e8eee8; font-size: 14px; }
+.result-row span { max-width: 480px; margin-top: 4px; color: #77847a; font-size: 11px; }
+.result-row b { flex: 0 0 auto; color: #b8d4a9; font-size: 13px; }
+.result-footer { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-top: 18px; color: #68736d; font-size: 11px; }
+.result-footer input { width: 180px; border: 1px solid #39423c; border-radius: 8px; padding: 8px 10px; color: #e8eee8; background: #101316; outline: none; }
 .empty-mark { display: grid; width: 52px; height: 52px; margin-bottom: 16px; place-items: center; border: 1px solid #3e4b43; border-radius: 50%; color: #b8d4a9; font-size: 30px; }
 .safety-panel { background: #20241f; }
 .safety-panel ul { display: grid; gap: 16px; margin: 30px 0 0; padding: 0; list-style: none; color: #c2ccc2; font-size: 14px; line-height: 1.4; }
