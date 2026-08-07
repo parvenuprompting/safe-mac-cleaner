@@ -1,0 +1,20 @@
+[package]
+name = "safe-mac-cleaner-v3"
+version = "3.0.0-alpha.1"
+description = "Safe Mac Cleaner v3 desktop shell"
+authors = ["Tiëndo Welles"]
+edition = "2021"
+
+[lib]
+name = "safe_mac_cleaner_v3_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.2.0", features = [] }
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2.5.0", features = [] }
+tauri-plugin-clipboard-manager = "2.2.0"
+tauri-plugin-store = "2.2.0"

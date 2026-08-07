@@ -11,6 +11,8 @@ De applicatie is momenteel een persoonlijke utility in actieve v2-ontwikkeling. 
 
 De huidige releaseversie is **2.1.0**.
 
+De toekomstige React + Tauri-lijn staat los van deze stabiele v2.x-app in `v3/`. Deze lijn gebruikt voorlopig versie `3.0.0-alpha.1` en wordt nog niet als productieversie aangeboden.
+
 Met deze app kun je:
 
 * In één oogopslag zien hoeveel schijfruimte vrij is (GB en %)
@@ -221,3 +223,19 @@ Voor een distributieklare release configureer je deze GitHub Actions-secrets:
 * `APPLE_APP_PASSWORD`
 
 De signing workflow gebruikt hardened runtime en notariseert de app wanneer alle Apple-credentials beschikbaar zijn. Versienummers moeten bij een nieuwe release worden bijgewerkt in `pyproject.toml` en `Safe Mac Cleaner.spec`.
+
+## V3 Development
+
+De v3-prototype gebruikt React 19, TypeScript, Vite, Tailwind CSS en Tauri 2. De nieuwe lijn kan onafhankelijk worden gestart en getest:
+
+```bash
+cd v3
+npm install
+npm run dev          # frontend preview
+npm run tauri:dev    # Tauri desktop shell
+npm run build
+npm run test
+npm run test:e2e
+```
+
+De eerste v3-alpha bevat de nieuwe interface, scanprofielen, Tauri command-skeleton, lokale clipboard/store plugins en testbasis. De Rust scanengine wordt daarna afzonderlijk gemigreerd en gevalideerd voordat v3 productiefunctionaliteit krijgt.

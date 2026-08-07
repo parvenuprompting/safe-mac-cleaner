@@ -9,3 +9,9 @@ venv/
 build/
 dist/
 *.egg-info/
+v3/node_modules/
+v3/dist/
+v3/src-tauri/target/
+v3/src-tauri/gen/
+v3/playwright-report/
+v3/test-results/

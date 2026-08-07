@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Safe Mac Cleaner",
+  "version": "3.0.0-alpha.1",
+  "identifier": "com.parvenuprompting.safemaccleaner.v3",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://127.0.0.1:1420",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Safe Mac Cleaner v3",
+        "width": 1180,
+        "height": 820,
+        "minWidth": 640,
+        "minHeight": 560,
+        "resizable": true
+      }
+    ],
+    "security": { "csp": null }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app"],
+    "category": "public.app-category.utilities",
+    "shortDescription": "Safe, local macOS disk cleanup",
+    "longDescription": "A transparent and reversible way to find old and large personal files.",
+    "macOS": { "minimumSystemVersion": "13.0" }
+  }
+}

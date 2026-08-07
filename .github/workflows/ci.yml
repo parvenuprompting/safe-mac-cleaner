@@ -24,3 +24,46 @@ jobs:
 
       - name: Run lint checks
         run: python -m ruff check smc_cleaner.py smc_gui.py models.py workers.py platform_macos.py tests
+
+  v3-frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: v3
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: v3/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Run Vitest
+        run: npm run test
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright
+        run: npm run test:e2e
+
+  v3-rust:
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: v3/src-tauri
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Check Rust desktop layer
+        run: cargo check
