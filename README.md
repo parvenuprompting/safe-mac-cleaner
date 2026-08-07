@@ -1,13 +1,18 @@
 # Safe Mac Cleaner
 
 [![CI](https://github.com/parvenuprompting/safe-mac-cleaner/actions/workflows/ci.yml/badge.svg)](https://github.com/parvenuprompting/safe-mac-cleaner/actions/workflows/ci.yml)
+[![Latest v2 release](https://img.shields.io/github/v/release/parvenuprompting/safe-mac-cleaner?label=v2%20stable%20release&color=2ea44f)](https://github.com/parvenuprompting/safe-mac-cleaner/releases/latest)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![v3 status](https://img.shields.io/badge/v3-3.0.0--alpha.1-orange)](v3/README.md)
+[![React](https://img.shields.io/badge/v3-React%2019-61DAFB?logo=react&logoColor=111111)](v3/README.md)
+[![Tauri](https://img.shields.io/badge/v3-Tauri%202-24C8DB?logo=tauri&logoColor=111111)](v3/README.md)
+[![Rust](https://img.shields.io/badge/v3-Rust-000000?logo=rust&logoColor=white)](v3/README.md)
 [![Platform](https://img.shields.io/badge/platform-macOS-000000?logo=apple&logoColor=white)](https://www.apple.com/macos/)
 [![License](https://img.shields.io/badge/license-not%20specified-lightgrey)](https://github.com/parvenuprompting/safe-mac-cleaner)
 
 Safe Mac Cleaner is een lichte, voorspelbare macOS-app voor veilige schijfopruiming. De kern bestaat uit Python-logica, verpakt in een overzichtelijke **PySide6 GUI**. Geen automatische deletes, geen cloud, geen verborgen acties: volledige controle blijft bij de gebruiker.
 
-De applicatie is momenteel een persoonlijke utility in actieve v2-ontwikkeling. De nadruk ligt op transparantie, veilige defaults en acties die de gebruiker kan controleren.
+De applicatie bestaat uit twee gescheiden lijnen: v2.x is de stabiele Python/PySide6-app; v3.x is de nieuwe React/Tauri-herbouw in alpha-ontwikkeling. Beide lijnen blijven lokaal, transparant en controleerbaar.
 
 De huidige releaseversie is **2.1.0**.
 
@@ -238,4 +243,4 @@ npm run test
 npm run test:e2e
 ```
 
-De eerste v3-alpha bevat de nieuwe interface, scanprofielen, Tauri commands, lokale clipboard/store plugins en testbasis. De eerste Rust scanengine is nu beschikbaar via `scan_files`; de React-resultatentabel wordt in de volgende stap daarop aangesloten.
+De eerste v3-alpha bevat de nieuwe interface, scanprofielen, Tauri commands, lokale clipboard/store plugins en testbasis. De Rust scanengine is beschikbaar via `scan_files`, met progress-events en annulering via `cancel_scan`; de React-resultatentabel gebruikt deze engine.

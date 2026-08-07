@@ -55,6 +55,7 @@ pub struct ScanStats {
     pub skipped_directories: u64,
     pub skipped_packages: u64,
     pub permission_errors: u64,
+    pub cancelled: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -64,6 +65,7 @@ pub struct ScanResponse {
     pub stats: ScanStats,
 }
 
+#[allow(dead_code)]
 pub fn scan_directories(
     directories: &[String],
     home: &Path,
@@ -72,6 +74,32 @@ pub fn scan_directories(
     age_mode: &str,
     top_n: usize,
 ) -> ScanResponse {
+    scan_directories_with_hooks(
+        directories,
+        home,
+        min_size_mb,
+        min_age_days,
+        age_mode,
+        top_n,
+        || false,
+        |_, _| {},
+    )
+}
+
+pub fn scan_directories_with_hooks<C, P>(
+    directories: &[String],
+    home: &Path,
+    min_size_mb: u64,
+    min_age_days: u64,
+    age_mode: &str,
+    top_n: usize,
+    should_cancel: C,
+    on_progress: P,
+) -> ScanResponse
+where
+    C: Fn() -> bool + Copy,
+    P: Fn(&Path, u64) + Copy,
+{
     let home = match home.canonicalize() {
         Ok(path) => path,
         Err(error) => {
@@ -97,6 +125,8 @@ pub fn scan_directories(
             &mut results,
             &mut errors,
             &mut stats,
+            should_cancel,
+            on_progress,
         );
     }
 
@@ -151,7 +181,7 @@ fn normalize_roots(directories: &[String], home: &Path) -> (Vec<PathBuf>, Vec<St
     (non_overlapping, errors)
 }
 
-fn scan_directory(
+fn scan_directory<C, P>(
     directory: &Path,
     home: &Path,
     min_size_mb: u64,
@@ -160,7 +190,12 @@ fn scan_directory(
     results: &mut Vec<ScanItem>,
     errors: &mut Vec<String>,
     stats: &mut ScanStats,
-) {
+    should_cancel: C,
+    on_progress: P,
+) where
+    C: Fn() -> bool + Copy,
+    P: Fn(&Path, u64) + Copy,
+{
     let entries = match fs::read_dir(directory) {
         Ok(entries) => entries,
         Err(error) => {
@@ -171,6 +206,10 @@ fn scan_directory(
     };
 
     for entry in entries {
+        if should_cancel() {
+            stats.cancelled = true;
+            return;
+        }
         let entry = match entry {
             Ok(entry) => entry,
             Err(error) => {
@@ -207,6 +246,8 @@ fn scan_directory(
                     results,
                     errors,
                     stats,
+                    should_cancel,
+                    on_progress,
                 );
             }
             continue;
@@ -228,6 +269,7 @@ fn scan_directory(
             continue;
         }
         stats.inspected_files += 1;
+        on_progress(&path, stats.inspected_files);
 
         let metadata = match entry.metadata() {
             Ok(metadata) => metadata,

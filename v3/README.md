@@ -1,5 +1,12 @@
 # Safe Mac Cleaner v3
 
+[![CI](https://github.com/parvenuprompting/safe-mac-cleaner/actions/workflows/ci.yml/badge.svg)](https://github.com/parvenuprompting/safe-mac-cleaner/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/badge/version-3.0.0--alpha.1-orange)](https://github.com/parvenuprompting/safe-mac-cleaner/tree/main/v3)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=111111)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.8%2B-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Tauri](https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=111111)](https://tauri.app/)
+[![Rust](https://img.shields.io/badge/Rust-desktop%20layer-000000?logo=rust&logoColor=white)](https://www.rust-lang.org/)
+
 This is the separate React + Tauri v3 line. The existing Python/PySide6 application remains the stable v2.x line in the repository root.
 
 ## Requirements
@@ -29,4 +36,4 @@ npm run test
 npm run test:e2e
 ```
 
-The first v3 milestone contains the frontend shell, Tauri 2 commands, local clipboard/store plugins and test foundations. The Rust scanner is now available through the `scan_files` command; the React results table will be connected in the next step.
+The first v3 milestone contains the frontend shell, Tauri 2 commands, local clipboard/store plugins and test foundations. The Rust scanner is available through `scan_files`, with progress events and cancellation through `cancel_scan`. The React results view is connected to the scanner; delete-to-Trash is the next safety milestone.

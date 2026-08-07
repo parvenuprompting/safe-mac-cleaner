@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getAppInfo, scanFiles, type ScanItem, type ScanResponse } from "./lib/tauri";
+import { cancelScan, getAppInfo, listenToScanProgress, scanFiles, type ScanItem, type ScanResponse } from "./lib/tauri";
 import { profileFilters, scanProfiles, type ScanProfile } from "./features/scan/scanProfiles";
 
 type AppInfo = { name: string; version: string };
@@ -15,6 +15,10 @@ export function App() {
 
   useEffect(() => {
     getAppInfo().then(setAppInfo).catch(() => undefined);
+    const unlisten = listenToScanProgress(({ path, inspected_files }) => {
+      setStatus(`Onderzocht: ${inspected_files} bestanden · ${path}`);
+    });
+    return () => { void unlisten.then((cleanup) => cleanup()); };
   }, []);
 
   async function startScan() {
@@ -24,7 +28,9 @@ export function App() {
       const response = await scanFiles(profileFilters[profile]);
       setScanResponse(response);
       setResults(response.results);
-      if (response.results.length > 0) {
+      if (response.stats.cancelled) {
+        setStatus(`Scan geannuleerd na ${response.stats.inspected_files} onderzochte bestanden.`);
+      } else if (response.results.length > 0) {
         setStatus(`${response.results.length} geschikte bestanden gevonden.`);
       } else {
         setStatus(`Geen bestanden gevonden. ${response.stats.inspected_files} bestanden onderzocht.`);
@@ -34,12 +40,17 @@ export function App() {
       setScanResponse({
         results: [],
         errors: [error instanceof Error ? error.message : "Onbekende scanfout"],
-        stats: { inspected_files: 0, candidates: 0, skipped_age: 0, skipped_size: 0, skipped_packages: 0, permission_errors: 0 },
+        stats: { inspected_files: 0, candidates: 0, skipped_age: 0, skipped_size: 0, skipped_packages: 0, permission_errors: 0, cancelled: false },
       });
       setResults([]);
     } finally {
       setScanning(false);
     }
+  }
+
+  async function stopScan() {
+    await cancelScan();
+    setStatus("Scan wordt geannuleerd...");
   }
 
   const visibleResults = results.filter((item) => item.path.toLowerCase().includes(query.toLowerCase()));
@@ -70,9 +81,12 @@ export function App() {
             ))}
           </select>
           <p className="control-hint">{scanProfiles[profile].description}</p>
-          <button className="primary-button" onClick={startScan} disabled={scanning}>
-            {scanning ? "Scan wordt voorbereid..." : "Start scan"}
-          </button>
+          <div className="button-row">
+            <button className="primary-button" onClick={startScan} disabled={scanning}>
+              {scanning ? "Scan bezig..." : "Start scan"}
+            </button>
+            {scanning && <button className="secondary-button" onClick={stopScan}>Stop scan</button>}
+          </div>
         </div>
       </section>
 

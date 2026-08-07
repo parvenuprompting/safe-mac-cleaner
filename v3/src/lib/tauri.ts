@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 export const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -19,8 +20,11 @@ export type ScanResponse = {
     skipped_size: number;
     skipped_packages: number;
     permission_errors: number;
+    cancelled: boolean;
   };
 };
+
+export type ScanProgress = { path: string; inspected_files: number };
 
 export async function getAppInfo(): Promise<{ name: string; version: string }> {
   if (!isTauri) {
@@ -45,6 +49,7 @@ export async function scanFiles(options: {
         skipped_size: 0,
         skipped_packages: 0,
         permission_errors: 0,
+        cancelled: false,
       },
     };
   }
@@ -55,4 +60,13 @@ export async function scanFiles(options: {
     age_mode: "last_modified",
     top_n: options.topN ?? 100,
   });
+}
+
+export async function cancelScan(): Promise<void> {
+  if (isTauri) await invoke("cancel_scan");
+}
+
+export function listenToScanProgress(handler: (progress: ScanProgress) => void) {
+  if (!isTauri) return Promise.resolve(() => undefined);
+  return listen<ScanProgress>("scan-progress", (event) => handler(event.payload));
 }
