@@ -25,6 +25,7 @@
   "bundle": {
     "active": true,
     "targets": ["app"],
+    "icon": ["icons/icon.icns", "icons/icon.png"],
     "category": "public.app-category.utilities",
     "shortDescription": "Safe, local macOS disk cleanup",
     "longDescription": "A transparent and reversible way to find old and large personal files.",

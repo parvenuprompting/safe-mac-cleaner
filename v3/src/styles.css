@@ -13,6 +13,7 @@ body { margin: 0; min-width: 320px; min-height: 100vh; background: #101316; }
 button, select { font: inherit; }
 
 .app-shell { max-width: 1180px; margin: 0 auto; padding: 46px 28px 28px; }
+.brand-mark { width: 56px; height: 56px; margin-bottom: 22px; border-radius: 16px; box-shadow: 0 10px 30px #07100b88; }
 .topbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 34px; }
 .eyebrow { margin: 0 0 10px; color: #91a995; font-size: 11px; font-weight: 800; letter-spacing: .16em; }
 h1, h2, h3, p { margin-top: 0; }

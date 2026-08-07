@@ -37,3 +37,14 @@ npm run test:e2e
 ```
 
 The first v3 milestone contains the frontend shell, Tauri 2 commands, local clipboard/store plugins and test foundations. The Rust scanner is available through `scan_files`, with progress events and cancellation through `cancel_scan`. The React results view is connected to the scanner and selected files can be moved to the macOS Trash after stale-file validation.
+
+## v3 Alpha Release
+
+Create a v3 alpha release from the repository root with:
+
+```bash
+git tag v3.0.0-alpha.1
+git push origin v3.0.0-alpha.1
+```
+
+The `v3.*` GitHub Actions workflow builds an Apple Silicon `.app` with the v3 logo and native macOS icon, then publishes it as a prerelease. Signing and notarization are not configured for the alpha yet.

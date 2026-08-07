@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Safe Mac Cleaner v3</title>
+  <desc id="desc">A quiet green archive mark with a protected sparkle.</desc>
+  <rect width="1024" height="1024" rx="232" fill="#101316"/>
+  <path d="M512 152c-145 0-263 118-263 263v76c0 145 118 263 263 263s263-118 263-263v-76c0-145-118-263-263-263Z" fill="#213329" stroke="#b8d4a9" stroke-width="24"/>
+  <path d="M391 566c39 46 82 69 129 69 48 0 91-23 130-69" fill="none" stroke="#b8d4a9" stroke-linecap="round" stroke-width="28"/>
+  <circle cx="420" cy="423" r="22" fill="#f1f2ed"/>
+  <circle cx="604" cy="423" r="22" fill="#f1f2ed"/>
+  <path d="m792 174 18 51 51 18-51 18-18 51-18-51-51-18 51-18 18-51Z" fill="#f1f2ed"/>
+  <path d="M512 108v-40M512 956v-40M108 512H68M956 512h-40" stroke="#78947b" stroke-linecap="round" stroke-width="16"/>
+</svg>

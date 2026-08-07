@@ -1,0 +1,42 @@
+name: v3 macOS Release
+
+on:
+  push:
+    tags:
+      - "v3.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: v3
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: v3/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build and bundle v3
+        run: npm run tauri:build
+
+      - name: Package Apple Silicon application
+        run: ditto -c -k --sequesterRsrc --keepParent "src-tauri/target/release/bundle/macos/Safe Mac Cleaner.app" "Safe-Mac-Cleaner-${GITHUB_REF_NAME}.zip"
+
+      - name: Publish v3 alpha release
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: true
+          generate_release_notes: true
+          files: v3/Safe-Mac-Cleaner-${{ github.ref_name }}.zip

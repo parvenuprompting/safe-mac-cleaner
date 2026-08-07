@@ -4,6 +4,7 @@
 [![Latest v2 release](https://img.shields.io/github/v/release/parvenuprompting/safe-mac-cleaner?label=v2%20stable%20release&color=2ea44f)](https://github.com/parvenuprompting/safe-mac-cleaner/releases/latest)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![v3 status](https://img.shields.io/badge/v3-3.0.0--alpha.1-orange)](v3/README.md)
+[![v3 alpha release](https://img.shields.io/github/v/release/parvenuprompting/safe-mac-cleaner?filter=v3*&label=v3%20alpha&color=orange)](https://github.com/parvenuprompting/safe-mac-cleaner/releases)
 [![React](https://img.shields.io/badge/v3-React%2019-61DAFB?logo=react&logoColor=111111)](v3/README.md)
 [![Tauri](https://img.shields.io/badge/v3-Tauri%202-24C8DB?logo=tauri&logoColor=111111)](v3/README.md)
 [![Rust](https://img.shields.io/badge/v3-Rust-000000?logo=rust&logoColor=white)](v3/README.md)
@@ -188,6 +189,7 @@ Het biedt een bewuste en gecontroleerde manier om schijfruimte vrij te maken, zo
 * `Safe Mac Cleaner.spec`: PyInstaller-configuratie voor een macOS-build
 * `.github/workflows/ci.yml`: automatische tests en linting
 * `.github/workflows/release.yml`: getagde macOS-builds en GitHub Releases
+* `.github/workflows/release-v3.yml`: v3 Apple Silicon alpha-builds en releases
 
 De resultatenlijst ondersteunt zoeken op bestandsnaam of pad, sorteren per kolom en een detailweergave van het geselecteerde bestand. Via **Uitsluitingen** kunnen eerder uitgesloten bestanden ook weer worden beheerd en verwijderd uit de uitsluitingslijst.
 
@@ -244,3 +246,5 @@ npm run test:e2e
 ```
 
 De eerste v3-alpha bevat de nieuwe interface, scanprofielen, Tauri commands, lokale clipboard/store plugins en testbasis. De Rust scanengine is beschikbaar via `scan_files`, met progress-events en annulering via `cancel_scan`; geselecteerde bestanden kunnen na stale-file controle naar de macOS-Prullenbak worden verplaatst.
+
+De v3-alpha gebruikt een eigen logo en native macOS icon-set. Een v3-release wordt gemaakt met een tag zoals `v3.0.0-alpha.1` en wordt als prerelease gepubliceerd.

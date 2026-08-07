@@ -79,6 +79,7 @@ export function App() {
     <main className="app-shell">
       <header className="topbar">
         <div>
+          <img className="brand-mark" src="/v3-logo.svg" alt="Safe Mac Cleaner v3" />
           <p className="eyebrow">SAFE MAC CLEANER / V3</p>
           <h1>Ruimte terug, zonder giswerk.</h1>
           <p className="lede">Een rustige, lokale bestandsbrowser voor je Mac.</p>
