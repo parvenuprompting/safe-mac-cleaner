@@ -1,6 +1,6 @@
 [package]
 name = "safe-mac-cleaner-v3"
-version = "3.0.0-alpha.1"
+version = "3.0.0-alpha.2"
 description = "Safe Mac Cleaner v3 desktop shell"
 authors = ["Tiëndo Welles"]
 edition = "2021"

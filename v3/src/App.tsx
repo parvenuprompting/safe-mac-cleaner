@@ -1,11 +1,26 @@
 import { useEffect, useState } from "react";
-import { cancelScan, getAppInfo, listenToScanProgress, moveToTrash, scanFiles, type ScanItem, type ScanResponse } from "./lib/tauri";
+import { cancelScan, getAppInfo, listenToScanProgress, moveToTrash, revealInFinder, scanFiles, type ScanItem, type ScanResponse } from "./lib/tauri";
 import { profileFilters, scanProfiles, type ScanProfile } from "./features/scan/scanProfiles";
 
 type AppInfo = { name: string; version: string };
+type CustomFilters = { minSizeMb: number; minAgeDays: number; topN: number };
+
+function describeError(error: unknown): string {
+  if (typeof error === "string") return error;
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object") {
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return "Onbekende scanfout (niet serialiseerbaar object).";
+    }
+  }
+  return `Onbekende scanfout: ${String(error)}`;
+}
 
 export function App() {
   const [profile, setProfile] = useState<ScanProfile>("custom");
+  const [filters, setFilters] = useState<CustomFilters>({ ...profileFilters.custom, topN: 100 });
   const [scanning, setScanning] = useState(false);
   const [status, setStatus] = useState("Klaar voor een veilige scan.");
   const [results, setResults] = useState<ScanItem[]>([]);
@@ -13,7 +28,7 @@ export function App() {
   const [query, setQuery] = useState("");
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
-  const [appInfo, setAppInfo] = useState<AppInfo>({ name: "Safe Mac Cleaner", version: "3.0.0-alpha.1" });
+  const [appInfo, setAppInfo] = useState<AppInfo>({ name: "Safe Mac Cleaner", version: "3.0.0-alpha.2" });
 
   useEffect(() => {
     getAppInfo().then(setAppInfo).catch(() => undefined);
@@ -27,7 +42,7 @@ export function App() {
     setScanning(true);
     setStatus("Lokale mappen worden onderzocht...");
     try {
-      const response = await scanFiles(profileFilters[profile]);
+      const response = await scanFiles(filters);
       setScanResponse(response);
       setResults(response.results);
       setSelectedPaths(new Set());
@@ -39,10 +54,12 @@ export function App() {
         setStatus(`Geen bestanden gevonden. ${response.stats.inspected_files} bestanden onderzocht.`);
       }
     } catch (error) {
+      const message = describeError(error);
+      console.error("Safe Mac Cleaner v3 scan failed", error);
       setStatus("Scan mislukt.");
       setScanResponse({
         results: [],
-        errors: [error instanceof Error ? error.message : "Onbekende scanfout"],
+        errors: [message],
         stats: { inspected_files: 0, candidates: 0, skipped_age: 0, skipped_size: 0, skipped_packages: 0, permission_errors: 0, cancelled: false },
       });
       setResults([]);
@@ -75,6 +92,18 @@ export function App() {
 
   const visibleResults = results.filter((item) => item.path.toLowerCase().includes(query.toLowerCase()));
 
+  function selectProfile(nextProfile: ScanProfile) {
+    setProfile(nextProfile);
+    setFilters({ ...profileFilters[nextProfile], topN: 100 });
+  }
+
+  function updateFilter(name: keyof CustomFilters, value: string) {
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed)) return;
+    const limits = { minSizeMb: [0, 1_000_000], minAgeDays: [0, 36_500], topN: [1, 10_000] }[name];
+    setFilters((current) => ({ ...current, [name]: Math.max(limits[0], Math.min(limits[1], parsed)) }));
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -96,12 +125,17 @@ export function App() {
         </div>
         <div className="scan-controls">
           <label htmlFor="profile">Scanprofiel</label>
-          <select id="profile" value={profile} onChange={(event) => setProfile(event.target.value as ScanProfile)}>
+          <select id="profile" value={profile} onChange={(event) => selectProfile(event.target.value as ScanProfile)}>
             {Object.entries(scanProfiles).map(([key, value]) => (
               <option key={key} value={key}>{value.label}</option>
             ))}
           </select>
           <p className="control-hint">{scanProfiles[profile].description}</p>
+          <div className={`custom-filters ${profile === "custom" ? "" : "is-hidden"}`} aria-label="Aangepaste filters">
+            <label>Minimale grootte (MB)<input type="number" min="0" max="1000000" value={filters.minSizeMb} onChange={(event) => updateFilter("minSizeMb", event.target.value)} /></label>
+            <label>Minimale ouderdom (dagen)<input type="number" min="0" max="36500" value={filters.minAgeDays} onChange={(event) => updateFilter("minAgeDays", event.target.value)} /></label>
+            <label>Maximale resultaten<input type="number" min="1" max="10000" value={filters.topN} onChange={(event) => updateFilter("topN", event.target.value)} /></label>
+          </div>
           <div className="button-row">
             <button className="primary-button" onClick={startScan} disabled={scanning}>
               {scanning ? "Scan bezig..." : "Start scan"}
@@ -124,13 +158,14 @@ export function App() {
             <div className="empty-state">
               <div className="empty-mark">⌁</div>
               <p>{results.length ? "Geen resultaten voor deze zoekopdracht." : "Je scanresultaten verschijnen hier."}</p>
-              <span>{scanResponse?.errors[0] ?? "Start een scan om lokale resultaten te bekijken."}</span>
+              <span className="error-text">{scanResponse?.errors[0] ?? "Start een scan om lokale resultaten te bekijken."}</span>
             </div>
           ) : (
             <div className="result-list">
               {visibleResults.map((item) => (
                 <div className="result-row" key={item.path}>
                   <div className="result-main"><input type="checkbox" checked={selectedPaths.has(item.path)} onChange={() => setSelectedPaths((current) => { const next = new Set(current); next.has(item.path) ? next.delete(item.path) : next.add(item.path); return next; })} /><div><strong>{item.path.split("/").pop()}</strong><span>{item.path}</span></div></div>
+                  <button className="finder-button" onClick={() => revealInFinder(item.path)} aria-label={`Toon ${item.path} in Finder`}>Finder</button>
                   <b>{item.size_mb.toFixed(1)} MB</b>
                 </div>
               ))}

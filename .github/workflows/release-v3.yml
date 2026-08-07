@@ -32,7 +32,7 @@ jobs:
         run: npm run tauri:build
 
       - name: Package Apple Silicon application
-        run: ditto -c -k --sequesterRsrc --keepParent "src-tauri/target/release/bundle/macos/Safe Mac Cleaner.app" "Safe-Mac-Cleaner-${GITHUB_REF_NAME}.zip"
+        run: ditto -c -k --sequesterRsrc --keepParent "src-tauri/target/release/bundle/macos/Safe Mac Cleaner v3.app" "Safe-Mac-Cleaner-${GITHUB_REF_NAME}.zip"
 
       - name: Publish v3 alpha release
         uses: softprops/action-gh-release@v2

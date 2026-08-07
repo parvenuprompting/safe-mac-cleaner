@@ -3,7 +3,7 @@
 [![CI](https://github.com/parvenuprompting/safe-mac-cleaner/actions/workflows/ci.yml/badge.svg)](https://github.com/parvenuprompting/safe-mac-cleaner/actions/workflows/ci.yml)
 [![Latest v2 release](https://img.shields.io/github/v/release/parvenuprompting/safe-mac-cleaner?label=v2%20stable%20release&color=2ea44f)](https://github.com/parvenuprompting/safe-mac-cleaner/releases/latest)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![v3 status](https://img.shields.io/badge/v3-3.0.0--alpha.1-orange)](v3/README.md)
+[![v3 status](https://img.shields.io/badge/v3-3.0.0--alpha.2-orange)](v3/README.md)
 [![v3 alpha release](https://img.shields.io/github/v/release/parvenuprompting/safe-mac-cleaner?filter=v3*&label=v3%20alpha&color=orange)](https://github.com/parvenuprompting/safe-mac-cleaner/releases)
 [![React](https://img.shields.io/badge/v3-React%2019-61DAFB?logo=react&logoColor=111111)](v3/README.md)
 [![Tauri](https://img.shields.io/badge/v3-Tauri%202-24C8DB?logo=tauri&logoColor=111111)](v3/README.md)
@@ -17,7 +17,7 @@ De applicatie bestaat uit twee gescheiden lijnen: v2.x is de stabiele Python/PyS
 
 De huidige releaseversie is **2.1.0**.
 
-De toekomstige React + Tauri-lijn staat los van deze stabiele v2.x-app in `v3/`. Deze lijn gebruikt voorlopig versie `3.0.0-alpha.1` en wordt nog niet als productieversie aangeboden.
+De toekomstige React + Tauri-lijn staat los van deze stabiele v2.x-app in `v3/`. Deze lijn gebruikt voorlopig versie `3.0.0-alpha.2` en wordt nog niet als productieversie aangeboden.
 
 Met deze app kun je:
 
@@ -245,6 +245,8 @@ npm run test
 npm run test:e2e
 ```
 
-De eerste v3-alpha bevat de nieuwe interface, scanprofielen, Tauri commands, lokale clipboard/store plugins en testbasis. De Rust scanengine is beschikbaar via `scan_files`, met progress-events en annulering via `cancel_scan`; geselecteerde bestanden kunnen na stale-file controle naar de macOS-Prullenbak worden verplaatst.
+De eerste v3-alpha bevat de nieuwe interface, scanprofielen, aangepaste filters, Tauri commands, lokale clipboard/store plugins en testbasis. De Rust scanengine is beschikbaar via `scan_files`, met progress-events en annulering via `cancel_scan`; geselecteerde bestanden kunnen na stale-file controle naar de macOS-Prullenbak worden verplaatst en in Finder worden geopend.
 
-De v3-alpha gebruikt een eigen logo en native macOS icon-set. Een v3-release wordt gemaakt met een tag zoals `v3.0.0-alpha.1` en wordt als prerelease gepubliceerd.
+De v3-alpha gebruikt een eigen logo en native macOS icon-set. De huidige v3-versie is `3.0.0-alpha.2`; een v3-release wordt gemaakt met een tag zoals `v3.0.0-alpha.2` en wordt als prerelease gepubliceerd.
+
+De v3-interface ondersteunt aangepaste filters voor minimale bestandsgrootte, minimale ouderdom en maximaal aantal resultaten. Resultaatregels bieden zoeken, selectie, veilige verwijdering naar de Prullenbak en openen in Finder. De scanlayout blijft stabiel tijdens progress-updates en wisselingen tussen profielen.

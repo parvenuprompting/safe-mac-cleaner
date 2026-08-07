@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 use tauri::{AppHandle, Emitter};
@@ -28,7 +29,7 @@ fn get_app_info() -> AppInfo {
     }
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 async fn scan_files(
     app: AppHandle,
     directories: Vec<String>,
@@ -95,10 +96,28 @@ fn cancel_scan() {
     scan_cancel_flag().store(true, Ordering::Relaxed);
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 fn move_to_trash(items: Vec<deletion::DeleteItem>) -> deletion::DeleteResponse {
     let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/"));
     deletion::move_to_trash(&items, &home)
+}
+
+#[tauri::command(rename_all = "snake_case")]
+fn reveal_in_finder(path: String) -> Result<(), String> {
+    let home = dirs::home_dir().ok_or_else(|| "Kan home-directory niet bepalen".to_string())?;
+    let resolved = std::path::PathBuf::from(&path)
+        .canonicalize()
+        .map_err(|error| format!("Bestand bestaat niet meer: {error}"))?;
+    if !resolved.starts_with(&home) || resolved == home {
+        return Err("Bestand valt buiten de veilige home-directory".to_string());
+    }
+    Command::new("open")
+        .args(["-R", resolved.to_string_lossy().as_ref()])
+        .status()
+        .map_err(|error| format!("Finder kon niet worden geopend: {error}"))?
+        .success()
+        .then_some(())
+        .ok_or_else(|| "Finder kon het bestand niet tonen".to_string())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -110,7 +129,8 @@ pub fn run() {
             get_app_info,
             scan_files,
             cancel_scan,
-            move_to_trash
+            move_to_trash,
+            reveal_in_finder
         ])
         .run(tauri::generate_context!())
         .expect("error while running Safe Mac Cleaner v3");

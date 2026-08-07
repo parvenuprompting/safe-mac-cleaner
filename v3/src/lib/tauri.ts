@@ -32,7 +32,7 @@ export type ScanProgress = { path: string; inspected_files: number };
 
 export async function getAppInfo(): Promise<{ name: string; version: string }> {
   if (!isTauri) {
-    return { name: "Safe Mac Cleaner", version: "3.0.0-alpha.1" };
+    return { name: "Safe Mac Cleaner", version: "3.0.0-alpha.2" };
   }
   return invoke("get_app_info");
 }
@@ -73,6 +73,11 @@ export async function cancelScan(): Promise<void> {
 export async function moveToTrash(items: ScanItem[]): Promise<DeleteResponse> {
   if (!isTauri) return { succeeded: [], failed: items.map(({ path }) => ({ path, error: "Start de Tauri-app om bestanden te verplaatsen." })) };
   return invoke("move_to_trash", { items });
+}
+
+export async function revealInFinder(path: string): Promise<void> {
+  if (!isTauri) return;
+  await invoke("reveal_in_finder", { path });
 }
 
 export function listenToScanProgress(handler: (progress: ScanProgress) => void) {
