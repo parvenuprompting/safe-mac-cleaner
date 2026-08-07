@@ -243,4 +243,4 @@ npm run test
 npm run test:e2e
 ```
 
-De eerste v3-alpha bevat de nieuwe interface, scanprofielen, Tauri commands, lokale clipboard/store plugins en testbasis. De Rust scanengine is beschikbaar via `scan_files`, met progress-events en annulering via `cancel_scan`; de React-resultatentabel gebruikt deze engine.
+De eerste v3-alpha bevat de nieuwe interface, scanprofielen, Tauri commands, lokale clipboard/store plugins en testbasis. De Rust scanengine is beschikbaar via `scan_files`, met progress-events en annulering via `cancel_scan`; geselecteerde bestanden kunnen na stale-file controle naar de macOS-Prullenbak worden verplaatst.

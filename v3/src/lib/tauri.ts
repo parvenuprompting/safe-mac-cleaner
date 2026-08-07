@@ -5,10 +5,14 @@ export const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in
 
 export type ScanItem = {
   path: string;
+  size_bytes: number;
+  modified_unix: number;
   size_mb: number;
   age_days: number;
   file_type: string;
 };
+
+export type DeleteResponse = { succeeded: string[]; failed: { path: string; error: string }[] };
 
 export type ScanResponse = {
   results: ScanItem[];
@@ -64,6 +68,11 @@ export async function scanFiles(options: {
 
 export async function cancelScan(): Promise<void> {
   if (isTauri) await invoke("cancel_scan");
+}
+
+export async function moveToTrash(items: ScanItem[]): Promise<DeleteResponse> {
+  if (!isTauri) return { succeeded: [], failed: items.map(({ path }) => ({ path, error: "Start de Tauri-app om bestanden te verplaatsen." })) };
+  return invoke("move_to_trash", { items });
 }
 
 export function listenToScanProgress(handler: (progress: ScanProgress) => void) {

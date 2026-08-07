@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { cancelScan, getAppInfo, listenToScanProgress, scanFiles, type ScanItem, type ScanResponse } from "./lib/tauri";
+import { cancelScan, getAppInfo, listenToScanProgress, moveToTrash, scanFiles, type ScanItem, type ScanResponse } from "./lib/tauri";
 import { profileFilters, scanProfiles, type ScanProfile } from "./features/scan/scanProfiles";
 
 type AppInfo = { name: string; version: string };
@@ -11,6 +11,8 @@ export function App() {
   const [results, setResults] = useState<ScanItem[]>([]);
   const [scanResponse, setScanResponse] = useState<ScanResponse | null>(null);
   const [query, setQuery] = useState("");
+  const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
   const [appInfo, setAppInfo] = useState<AppInfo>({ name: "Safe Mac Cleaner", version: "3.0.0-alpha.1" });
 
   useEffect(() => {
@@ -28,6 +30,7 @@ export function App() {
       const response = await scanFiles(profileFilters[profile]);
       setScanResponse(response);
       setResults(response.results);
+      setSelectedPaths(new Set());
       if (response.stats.cancelled) {
         setStatus(`Scan geannuleerd na ${response.stats.inspected_files} onderzochte bestanden.`);
       } else if (response.results.length > 0) {
@@ -51,6 +54,23 @@ export function App() {
   async function stopScan() {
     await cancelScan();
     setStatus("Scan wordt geannuleerd...");
+  }
+
+  async function deleteSelected() {
+    const selected = results.filter((item) => selectedPaths.has(item.path));
+    if (!selected.length || !window.confirm(`Verplaats ${selected.length} bestanden (${selected.reduce((sum, item) => sum + item.size_mb, 0).toFixed(1)} MB) naar de Prullenbak?`)) return;
+    setDeleting(true);
+    const response = await moveToTrash(selected);
+    setDeleting(false);
+    if (response.failed.length) {
+      setStatus(`${response.succeeded.length} verplaatst, ${response.failed.length} niet verplaatst.`);
+    } else {
+      setStatus(`${response.succeeded.length} bestanden naar de Prullenbak verplaatst.`);
+    }
+    setSelectedPaths(new Set());
+    if (response.succeeded.length) {
+      setResults((current) => current.filter((item) => !response.succeeded.includes(item.path)));
+    }
   }
 
   const visibleResults = results.filter((item) => item.path.toLowerCase().includes(query.toLowerCase()));
@@ -109,7 +129,7 @@ export function App() {
             <div className="result-list">
               {visibleResults.map((item) => (
                 <div className="result-row" key={item.path}>
-                  <div><strong>{item.path.split("/").pop()}</strong><span>{item.path}</span></div>
+                  <div className="result-main"><input type="checkbox" checked={selectedPaths.has(item.path)} onChange={() => setSelectedPaths((current) => { const next = new Set(current); next.has(item.path) ? next.delete(item.path) : next.add(item.path); return next; })} /><div><strong>{item.path.split("/").pop()}</strong><span>{item.path}</span></div></div>
                   <b>{item.size_mb.toFixed(1)} MB</b>
                 </div>
               ))}
@@ -119,6 +139,7 @@ export function App() {
             <input aria-label="Zoek in resultaten" placeholder="Zoek in resultaten..." value={query} onChange={(event) => setQuery(event.target.value)} />
             <span>{scanResponse ? `${scanResponse.stats.inspected_files} onderzocht · ${scanResponse.stats.skipped_packages} pakketten overgeslagen` : ""}</span>
           </div>
+          {selectedPaths.size > 0 && <button className="danger-button" onClick={deleteSelected} disabled={deleting}>{deleting ? "Bezig..." : `Verplaats ${selectedPaths.size} naar Prullenbak`}</button>}
         </article>
         <aside className="panel safety-panel">
           <p className="eyebrow">VEILIGHEID EERST</p>

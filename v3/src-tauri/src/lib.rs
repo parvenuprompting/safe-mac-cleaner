@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 use tauri::{AppHandle, Emitter};
 
+mod deletion;
 mod scanner;
 
 static SCAN_CANCELLED: OnceLock<Arc<AtomicBool>> = OnceLock::new();
@@ -94,6 +95,12 @@ fn cancel_scan() {
     scan_cancel_flag().store(true, Ordering::Relaxed);
 }
 
+#[tauri::command]
+fn move_to_trash(items: Vec<deletion::DeleteItem>) -> deletion::DeleteResponse {
+    let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/"));
+    deletion::move_to_trash(&items, &home)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -102,7 +109,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_app_info,
             scan_files,
-            cancel_scan
+            cancel_scan,
+            move_to_trash
         ])
         .run(tauri::generate_context!())
         .expect("error while running Safe Mac Cleaner v3");

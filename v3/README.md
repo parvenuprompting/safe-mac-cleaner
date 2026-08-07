@@ -36,4 +36,4 @@ npm run test
 npm run test:e2e
 ```
 
-The first v3 milestone contains the frontend shell, Tauri 2 commands, local clipboard/store plugins and test foundations. The Rust scanner is available through `scan_files`, with progress events and cancellation through `cancel_scan`. The React results view is connected to the scanner; delete-to-Trash is the next safety milestone.
+The first v3 milestone contains the frontend shell, Tauri 2 commands, local clipboard/store plugins and test foundations. The Rust scanner is available through `scan_files`, with progress events and cancellation through `cancel_scan`. The React results view is connected to the scanner and selected files can be moved to the macOS Trash after stale-file validation.

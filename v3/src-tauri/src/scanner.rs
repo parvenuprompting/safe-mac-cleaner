@@ -39,6 +39,8 @@ const EXCLUDED_FILE_EXTENSIONS: &[&str] = &[
 #[derive(Debug, Serialize)]
 pub struct ScanItem {
     pub path: String,
+    pub size_bytes: u64,
+    pub modified_unix: u64,
     pub size_mb: f64,
     pub age_days: u64,
     pub file_type: String,
@@ -299,6 +301,13 @@ fn scan_directory<C, P>(
         stats.candidates += 1;
         results.push(ScanItem {
             path: path.to_string_lossy().to_string(),
+            size_bytes: metadata.len(),
+            modified_unix: metadata
+                .modified()
+                .ok()
+                .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|duration| duration.as_secs())
+                .unwrap_or(0),
             size_mb,
             age_days,
             file_type: Path::new(&name)
