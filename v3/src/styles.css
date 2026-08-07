@@ -62,7 +62,8 @@ select { width: 100%; border: 1px solid #506456; border-radius: 10px; padding: 1
 .result-row b { flex: 0 0 auto; color: #b8d4a9; font-size: 13px; }
 .finder-button { flex: 0 0 auto; border: 1px solid #4c5e50; border-radius: 7px; padding: 6px 9px; color: #b8d4a9; background: transparent; cursor: pointer; font-size: 11px; font-weight: 700; }
 .finder-button:hover { border-color: #b8d4a9; background: #b8d4a91c; }
-.result-footer { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-top: 18px; color: #68736d; font-size: 11px; }
+.result-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; align-items: center; margin-top: 18px; color: #68736d; font-size: 11px; }
+.result-footer .danger-button { flex: 0 0 auto; margin-top: 0; }
 .result-footer input { width: 180px; border: 1px solid #39423c; border-radius: 8px; padding: 8px 10px; color: #e8eee8; background: #101316; outline: none; }
 .danger-button { margin-top: 15px; border: 1px solid #9d695d; border-radius: 9px; padding: 10px 13px; color: #f3c7bd; background: #3b2522; cursor: pointer; font-weight: 700; }
 .empty-mark { display: grid; width: 52px; height: 52px; margin-bottom: 16px; place-items: center; border: 1px solid #3e4b43; border-radius: 50%; color: #b8d4a9; font-size: 30px; }

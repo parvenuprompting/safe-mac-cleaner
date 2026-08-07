@@ -29,7 +29,7 @@ export function App() {
   const [query, setQuery] = useState("");
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
-  const [appInfo, setAppInfo] = useState<AppInfo>({ name: "Safe Mac Cleaner", version: "3.0.0-alpha.3" });
+  const [appInfo, setAppInfo] = useState<AppInfo>({ name: "Safe Mac Cleaner", version: "3.0.0-alpha.4" });
 
   useEffect(() => {
     getAppInfo().then(setAppInfo).catch(() => undefined);
@@ -161,7 +161,7 @@ export function App() {
               <p className="eyebrow">RESULTATEN</p>
               <h3>{status}</h3>
             </div>
-            <span className="count-badge">0</span>
+             <span className="count-badge">{results.length}</span>
           </div>
           {visibleResults.length === 0 ? (
             <div className="empty-state">
@@ -183,8 +183,8 @@ export function App() {
           <div className="result-footer">
             <input aria-label="Zoek in resultaten" placeholder="Zoek in resultaten..." value={query} onChange={(event) => setQuery(event.target.value)} />
             <span>{scanResponse ? `${scanResponse.stats.inspected_files} onderzocht · ${scanResponse.stats.skipped_packages} pakketten overgeslagen` : ""}</span>
+            {selectedPaths.size > 0 && <button className="danger-button" onClick={deleteSelected} disabled={deleting}>{deleting ? "Bezig..." : `Verplaats ${selectedPaths.size} naar Prullenbak`}</button>}
           </div>
-          {selectedPaths.size > 0 && <button className="danger-button" onClick={deleteSelected} disabled={deleting}>{deleting ? "Bezig..." : `Verplaats ${selectedPaths.size} naar Prullenbak`}</button>}
         </article>
         <aside className="panel safety-panel">
           <p className="eyebrow">VEILIGHEID EERST</p>

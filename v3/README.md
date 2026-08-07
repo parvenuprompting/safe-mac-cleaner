@@ -47,8 +47,8 @@ Results can be selected for safe Trash deletion or revealed in Finder. The main 
 Create a v3 alpha release from the repository root with:
 
 ```bash
-git tag v3.0.0-alpha.3
-git push origin v3.0.0-alpha.3
+git tag v3.0.0-alpha.4
+git push origin v3.0.0-alpha.4
 ```
 
 The `v3.*` GitHub Actions workflow builds an Apple Silicon `Safe Mac Cleaner v3.app` with the v3 logo and native macOS icon, then publishes it as a prerelease. Signing and notarization are not configured for the alpha yet.
